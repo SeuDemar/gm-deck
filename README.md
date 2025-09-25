@@ -4,6 +4,8 @@
 
 GM.deck é um software online para gerenciamento de fichas de RPG de mesa. Ele permite que jogadores e mestres organizem fichas de personagens, gerenciem sessões e exportem PDFs, mantendo o controle das campanhas de forma centralizada e prática.
 
+Link de acesso a : https://drive.google.com/file/d/1xRyv0qkHfru8mYrGthOAduECl_9MTi1H/view?usp=sharing
+
 ---
 
 ## Visão Geral
