@@ -27,7 +27,7 @@ export default function LoginPage() {
     });
 
     if (error) setMessage(`Erro: ${error.message}`);
-    else router.push("/home"); // vai para o painel depois do login
+    else router.push("/dashboard"); // vai para o painel depois do login
   }
 
   return (

@@ -68,6 +68,17 @@ erDiagram
         UUID id PK
         UUID player_id FK
         JSON attributes
+        varchar Nome
+        varchar Raca
+        varchar Classe
+        int Nivel
+        int Forca
+        int Destreza
+        int Constituicao
+        int Inteligencia
+        int Sabedoria
+        int Carisma
+        text Historia
         TIMESTAMP created_at
     }
 
