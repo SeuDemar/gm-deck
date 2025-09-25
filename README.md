@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GM.deck
 
-## Getting Started
+![License](https://img.shields.io/badge/license-MIT-green)
 
-First, run the development server:
+GM.deck é um software online para gerenciamento de fichas de RPG de mesa. Ele permite que jogadores e mestres organizem fichas de personagens, gerenciem sessões e exportem PDFs, mantendo o controle das campanhas de forma centralizada e prática.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📝 Visão Geral
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Objetivo:**  
+Permitir que jogadores e mestres de RPG de mesa organizem suas fichas de forma digital, evitando retrabalho, confusão e excesso de papéis. O sistema oferece edição em tempo real, histórico de alterações, controle de sessões e exportação de PDFs.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Público-alvo:**
 
-## Learn More
+- Jogadores iniciantes que buscam praticidade e autonomia.  
+- Mestres veteranos que precisam gerenciar múltiplas campanhas simultâneas.  
+- Jogadores intermediários que atuam também como mestres ocasionais.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## ⚙ Funcionalidades
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Criação e edição de fichas de RPG em tempo real.  
+- Criação de sessões que interligam jogadores e mestres.  
+- Controle de acesso diferenciado (jogador x mestre).  
+- Pré-visualização e exportação de fichas em PDF.  
+- Histórico de alterações das fichas.  
+- Suporte a múltiplos personagens por jogador.  
+- Convite de jogadores via link de acesso.
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🏗 Arquitetura de Software
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Front-end:** Next.js (React) com renderização híbrida (SSR e CSR).  
+- **Back-end:** Next.js API Routes + Supabase Auth para autenticação via Magic Link.  
+- **Banco de Dados:** Supabase PostgreSQL, com tabelas: Users, Player, Master, Sheet, Game_Session. Campos flexíveis em JSON para fichas.  
+- **Infraestrutura:** Hospedagem na Vercel, Supabase para banco, autenticação e armazenamento de arquivos (imagens das fichas).  
+
+### Diagrama do Banco de Dados (ER Mermaid)
+```mermaid
+erDiagram
+    USERS ||--o{ PLAYER : "possui"
+    USERS ||--o{ MASTER : "possui"
+    PLAYER ||--o{ SHEET : "possui"
+    SHEET ||--o{ GAME_SESSION : "está em"
+    MASTER ||--o{ GAME_SESSION : "gerencia"
+    
+    USERS {
+        UUID id PK
+        VARCHAR name
+        VARCHAR email
+        TIMESTAMP created_at
+    }
+
+    PLAYER {
+        UUID id PK
+        UUID user_id FK
+    }
+
+    MASTER {
+        UUID id PK
+        UUID user_id FK
+    }
+
+    SHEET {
+        UUID id PK
+        UUID player_id FK
+        JSON attributes
+        TIMESTAMP created_at
+    }
+
+    GAME_SESSION {
+        UUID id PK
+        UUID master_id FK
+        VARCHAR name
+        TIMESTAMP start_date
+        TIMESTAMP end_date
+    }
