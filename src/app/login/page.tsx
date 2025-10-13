@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
-import styles from "./page.module.css";
+import "../globals.css";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,7 +15,7 @@ export default function LoginPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
-        router.push("/home");
+        router.push("/dashboard");
       }
     });
   }, [router]);
@@ -27,37 +27,49 @@ export default function LoginPage() {
     });
 
     if (error) setMessage(`Erro: ${error.message}`);
-    else router.push("/dashboard"); // vai para o painel depois do login
+    else router.push("/dashboard");
   }
 
   return (
-    <main className={styles.container}>
-      <h1 className={styles.title}>Login</h1>
+    <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
+        <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+          Login
+        </h1>
 
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className={styles.input}
-      />
-      <input
-        type="password"
-        placeholder="Senha"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className={styles.input}
-      />
+        {message && (
+          <p className="text-red-600 mb-4 text-center font-medium">{message}</p>
+        )}
 
-      <button onClick={handleLogin} className={styles.button}>
-        Entrar
-      </button>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+        />
+        <input
+          type="password"
+          placeholder="Senha"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full mb-6 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+        />
 
-      {message && <p className={styles.message}>{message}</p>}
+        <button
+          onClick={handleLogin}
+          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors font-semibold"
+        >
+          Entrar
+        </button>
 
-      <p className={styles.link}>
-        Não tem conta? <a href="/register">Cadastre-se</a>
-      </p>
+        <p className="mt-4 text-center text-gray-600">
+          Não tem conta?{" "}
+          <a href="/register" className="text-blue-600 hover:underline">
+            Cadastre-se
+          </a>
+        </p>
+      </div>
     </main>
   );
 }
