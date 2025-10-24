@@ -26,14 +26,31 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">
+    <main
+      className="flex min-h-screen items-center justify-center p-4 font-sans"
+      style={{ backgroundColor: "var(--color-background-light)" }}
+    >
+      <div
+        className="w-full max-w-md rounded-lg shadow-md p-8"
+        style={{
+          backgroundColor: "var(--color-text-primary)",
+          color: "var(--color-text-primary)",
+        }}
+      >
+        <h1
+          className="text-3xl font-bold mb-6 text-center"
+          style={{ color: "var(--color-brand)" }}
+        >
           Cadastro
         </h1>
 
         {message && (
-          <p className="text-center text-red-600 mb-4 font-medium">{message}</p>
+          <p
+            className="text-center mb-4 font-medium"
+            style={{ color: "var(--color-brand-accent)" }}
+          >
+            {message}
+          </p>
         )}
 
         <input
@@ -41,33 +58,71 @@ export default function RegisterPage() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          className="w-full mb-4 px-4 py-2 border rounded focus:outline-none focus:ring-2 transition"
+          style={
+            {
+              borderColor: "var(--color-brand-light)",
+              backgroundColor: "var(--color-text-primary)",
+              color: "black",
+              paddingLeft: "0.75rem",
+              paddingRight: "0.75rem",
+              "--tw-ring-color": "var(--color-brand-salmon)",
+            } as React.CSSProperties
+          }
         />
         <input
           type="password"
           placeholder="Senha"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full mb-4 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          className="w-full mb-4 px-4 py-2 border rounded focus:outline-none focus:ring-2 transition"
+          style={
+            {
+              borderColor: "var(--color-brand-light)",
+              backgroundColor: "var(--color-text-primary)",
+              color: "black",
+              paddingLeft: "0.75rem",
+              paddingRight: "0.75rem",
+              "--tw-ring-color": "var(--color-brand-salmon)",
+            } as React.CSSProperties
+          }
         />
         <input
           type="password"
           placeholder="Confirmar senha"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          className="w-full mb-6 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          className="w-full mb-6 px-4 py-2 border rounded focus:outline-none focus:ring-2 transition"
+          style={
+            {
+              borderColor: "var(--color-brand-light)",
+              backgroundColor: "var(--color-text-primary)",
+              color: "black",
+              paddingLeft: "0.75rem",
+              paddingRight: "0.75rem",
+              "--tw-ring-color": "var(--color-brand-salmon)",
+            } as React.CSSProperties
+          }
         />
 
         <button
           onClick={handleRegister}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors font-semibold"
+          className="w-full py-2 rounded hover:opacity-90 transition-colors font-semibold"
+          style={{
+            backgroundColor: "var(--color-brand)",
+            color: "var(--color-text-primary)",
+          }}
         >
           Cadastrar
         </button>
 
-        <p className="mt-4 text-center text-gray-600">
+        <p className="mt-4 text-center" style={{ color: "var(--color-brand)" }}>
           Já tem conta?{" "}
-          <a href="/login" className="text-blue-600 hover:underline">
+          <a
+            href="/login"
+            className="hover:underline"
+            style={{ color: "var(--color-brand-salmon)" }}
+          >
             Entrar
           </a>
         </p>

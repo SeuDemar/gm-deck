@@ -5,13 +5,14 @@ import "../globals.css";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
+import Modal from "../components/Modal";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Checa sessão e obtém user data
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
@@ -22,7 +23,6 @@ export default function DashboardPage() {
       }
     });
 
-    // Listener para mudanças de auth
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -43,8 +43,14 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <span className="text-gray-500 text-lg animate-pulse">
+      <div
+        className="flex items-center justify-center h-screen"
+        style={{ backgroundColor: "var(--color-background-light)" }}
+      >
+        <span
+          style={{ color: "var(--color-text-secondary)" }}
+          className="text-lg animate-pulse"
+        >
           Carregando...
         </span>
       </div>
@@ -56,26 +62,67 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen min-h-screen">
       {/* Sidebar */}
-      <aside className="w-64 bg-blue-700 text-white flex flex-col justify-between">
+      <aside
+        className="w-64 flex flex-col justify-between"
+        style={{
+          backgroundColor: "var(--color-brand)",
+          color: "var(--color-text-primary)",
+        }}
+      >
         <div className="p-4">
           {/* Avatar e nome */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 rounded-full bg-white text-blue-700 flex items-center justify-center text-xl font-bold">
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold"
+              style={{
+                backgroundColor: "var(--color-text-primary)",
+                color: "var(--color-brand)",
+              }}
+            >
               {user?.user_metadata?.full_name
                 ? getInitialAvatar(user.user_metadata.full_name)
                 : "?"}
             </div>
-            <p className="mt-2 text-center font-semibold text-white">
+            <p
+              className="mt-2 text-center font-semibold"
+              style={{ color: "var(--color-text-primary)" }} // texto branco
+            >
               {user?.user_metadata?.full_name || user?.email || "Usuário"}
             </p>
           </div>
 
           {/* Navegação */}
           <nav className="flex flex-col gap-2">
-            <button className="px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+            <button
+              className="px-4 py-2 rounded transition-colors"
+              style={{
+                backgroundColor: "transparent",
+                color: "var(--color-text-primary)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-brand-light)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+            >
               Mesas Ativas
             </button>
-            <button className="px-4 py-2 rounded hover:bg-blue-600 transition-colors">
+            <button
+              className="px-4 py-2 rounded transition-colors"
+              style={{
+                backgroundColor: "transparent",
+                color: "var(--color-text-primary)",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor =
+                  "var(--color-brand-light)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "transparent")
+              }
+            >
               Minhas Fichas
             </button>
           </nav>
@@ -85,7 +132,19 @@ export default function DashboardPage() {
         <div className="p-4">
           <button
             onClick={handleLogout}
-            className="w-full px-4 py-2 bg-red-600 rounded hover:bg-red-700 transition-colors"
+            className="w-full px-4 py-2 rounded transition-colors font-semibold"
+            style={{
+              backgroundColor: "var(--color-brand-accent)",
+              color: "var(--color-text-primary)",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor =
+                "var(--color-brand-salmon)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor =
+                "var(--color-brand-accent)")
+            }
           >
             Sair
           </button>
@@ -93,20 +152,29 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 overflow-y-auto bg-gray-50">
-        <header className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Bem-vindo ao Dashboard
-          </h1>
-          <p className="text-gray-600">Gerencie suas mesas e fichas aqui.</p>
-        </header>
+      <main
+        className="flex-1 p-6 overflow-y-auto relative"
+        style={{ backgroundColor: "var(--color-background-light)" }}
+      >
+        {/* Botão de adicionar ficha */}
+        <button
+          className="absolute left-15 top-12 w-40 h-40 flex items-center justify-center rounded-2xl shadow-md text-6xl font-extrabold hover:opacity-90 transition-all"
+          style={{
+            backgroundColor: "var(--color-brand)",
+            color: "var(--color-text-primary)",
+          }}
+          onClick={() => setIsModalOpen(true)}
+        >
+          +
+        </button>
 
-        {/* Área de conteúdo futura */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-700">
-            Conteúdo das fichas e mesas aparecerá aqui.
-          </p>
-        </div>
+        {/* Modal com PDF */}
+        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+          <iframe
+            src="/fichas/FichaOrdem.pdf#zoom=150"
+            className="w-full h-full rounded-xl"
+          />
+        </Modal>
       </main>
     </div>
   );

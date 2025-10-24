@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+@theme {
+  /* Cores principais da marca */
+  --color-brand: #650033;
+  /* Vinho escuro */
+  --color-brand-light: #a1394d;
+  /* Vermelho mais claro*/
+  --color-brand-salmon: #e9967a;
+  /* Salmão suave*/
+  --color-brand-accent: #ffb3ab;
+  /* Detalhe mais claro, alertas ou botões secundários */
+
+  /* Cores de fundo */
+  --color-background-light: #f5e9e7;
+  /* Fundo geral, seções claras */
+  --color-background-dark: #2c1b20;
+  /* Fundo escuro, sidebar ou áreas contrastantes */
+
+  /* Cores de texto */
+  --color-text-primary: #f5f5f5;
+  /* Texto principal */
+  --color-text-secondary: #e0d4d2;
+  /* Texto secundário */
+
+  /* Fontes */
+  --font-sans: "Inter", sans-serif;
+  /* Fonte principal do projeto */
+}
+
+
+
 body {
   background-color: #f9fafb;
   font-family: 'Arial', sans-serif;
