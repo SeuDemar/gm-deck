@@ -9,11 +9,14 @@ import Modal from "../components/Modal";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
+    // Verifica a sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         router.push("/login");
@@ -23,13 +26,15 @@ export default function DashboardPage() {
       }
     });
 
+    // Escuta mudanças no estado de autenticação
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
+      if (event === "SIGNED_OUT" || !session) {
         router.push("/login");
       } else if (session) {
         setUser(session.user);
+        setLoading(false);
       }
     });
 
@@ -37,8 +42,14 @@ export default function DashboardPage() {
   }, [router]);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    router.push("/login");
+    try {
+      await supabase.auth.signOut();
+      // O redirecionamento será feito automaticamente pelo onAuthStateChange
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      // Força o redirecionamento mesmo se houver erro
+      router.push("/login");
+    }
   }
 
   if (loading) {
