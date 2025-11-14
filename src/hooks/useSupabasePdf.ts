@@ -137,5 +137,27 @@ export function useSupabasePdf() {
     return data || [];
   }
 
-  return { savePdfData, getPdfData, getUserFichas };
+  // --- Excluir ficha
+  async function deleteFicha(fichaId: string) {
+    // Obtém o usuário atual logado
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Exclui a ficha apenas se pertencer ao usuário atual
+    const { error } = await supabase
+      .from("ficha")
+      .delete()
+      .eq("id", fichaId)
+      .eq("usuarioId", user.id);
+
+    if (error) {
+      console.error("Erro ao excluir ficha:", error);
+      throw error;
+    }
+  }
+
+  return { savePdfData, getPdfData, getUserFichas, deleteFicha };
 }

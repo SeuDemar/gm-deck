@@ -323,6 +323,72 @@ export function useSupabaseSessao() {
     await atualizarFichaIdsSessao(sessaoId);
   }
 
+  // --- Excluir sessão (apenas mestre)
+  async function excluirSessao(sessaoId: string) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Verifica se o usuário é o mestre da sessão
+    const { data: sessao, error: checkError } = await supabase
+      .from("sessao")
+      .select("mestre_id")
+      .eq("id", sessaoId)
+      .single();
+
+    if (checkError || !sessao || sessao.mestre_id !== user.id) {
+      throw new Error("Você não tem permissão para excluir esta sessão. Apenas o mestre pode excluir.");
+    }
+
+    // Exclui a sessão (as relações em sessao_jogador serão excluídas automaticamente pelo CASCADE)
+    const { error } = await supabase
+      .from("sessao")
+      .delete()
+      .eq("id", sessaoId);
+
+    if (error) {
+      console.error("Erro ao excluir sessão:", error);
+      throw error;
+    }
+  }
+
+  // --- Cortar vínculos com a sessão (jogador remove a si mesmo)
+  async function cortarVinculosSessao(sessaoId: string) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Busca o registro do jogador na sessão
+    const { data: sessaoJogador, error: fetchError } = await supabase
+      .from("sessao_jogador")
+      .select("id")
+      .eq("sessao_id", sessaoId)
+      .eq("usuario_id", user.id)
+      .single();
+
+    if (fetchError || !sessaoJogador) {
+      throw new Error("Você não está vinculado a esta sessão.");
+    }
+
+    // Remove o jogador da sessão
+    const { error } = await supabase
+      .from("sessao_jogador")
+      .delete()
+      .eq("id", sessaoJogador.id);
+
+    if (error) {
+      console.error("Erro ao cortar vínculos com a sessão:", error);
+      throw error;
+    }
+
+    // Atualiza o array ficha_ids na sessão
+    await atualizarFichaIdsSessao(sessaoId);
+  }
+
   return {
     criarSessao,
     getSessoesMestre,
@@ -332,7 +398,9 @@ export function useSupabaseSessao() {
     adicionarJogador,
     entrarSessao,
     removerJogador,
-    atualizarFichaIdsSessao
+    atualizarFichaIdsSessao,
+    excluirSessao,
+    cortarVinculosSessao
   };
 }
 

@@ -9,7 +9,7 @@ import PdfFichaModal from "../components/PdfFichaModal";
 import CriarSessaoModal from "../components/CriarSessaoModal";
 import EntrarSessaoModal from "../components/EntrarSessaoModal";
 import { useSupabasePdf } from "../../hooks/useSupabasePdf";
-import { useSupabaseSessao } from "../../hooks/useSupabaseSessao";
+import { useSupabaseSessao, Sessao } from "../../hooks/useSupabaseSessao";
 
 type FichaListItem = {
   id: string;
@@ -21,7 +21,7 @@ type FichaListItem = {
 export default function DashboardPage() {
   const router = useRouter();
   const { getUserFichas } = useSupabasePdf();
-  const { criarSessao, entrarSessao } = useSupabaseSessao();
+  const { criarSessao, entrarSessao, getSessoesMestre, getSessoesJogador } = useSupabaseSessao();
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null
   );
@@ -32,6 +32,9 @@ export default function DashboardPage() {
   const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(undefined);
   const [fichas, setFichas] = useState<FichaListItem[]>([]);
   const [loadingFichas, setLoadingFichas] = useState(false);
+  const [sessoes, setSessoes] = useState<Sessao[]>([]);
+  const [loadingSessoes, setLoadingSessoes] = useState(false);
+  const [activeTab, setActiveTab] = useState<"fichas" | "sessoes">("fichas");
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -79,6 +82,42 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Carrega as sessões do usuário quando ele estiver logado
+  useEffect(() => {
+    async function loadSessoes() {
+      if (!user) return;
+      
+      try {
+        setLoadingSessoes(true);
+        // Busca sessões como mestre e como jogador
+        const [sessoesMestre, sessoesJogador] = await Promise.all([
+          getSessoesMestre(),
+          getSessoesJogador()
+        ]);
+        
+        // Combina as sessões e remove duplicatas (caso o usuário seja mestre e jogador)
+        const todasSessoes = [...sessoesMestre, ...sessoesJogador];
+        const sessoesUnicas = todasSessoes.filter((sessao, index, self) =>
+          index === self.findIndex((s) => s.id === sessao.id)
+        );
+        
+        // Ordena por data de criação (mais recente primeiro)
+        sessoesUnicas.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        setSessoes(sessoesUnicas);
+      } catch (error) {
+        console.error("Erro ao carregar sessões:", error);
+      } finally {
+        setLoadingSessoes(false);
+      }
+    }
+
+    loadSessoes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   // Abre o modal para criar uma nova ficha
   function handleOpenNewFicha() {
     setSelectedFichaId(undefined);
@@ -110,8 +149,23 @@ export default function DashboardPage() {
   async function handleCriarSessao(nome: string, descricao?: string) {
     try {
       const sessao = await criarSessao(nome, descricao);
-      alert(`Sessão "${nome}" criada com sucesso! ID: ${sessao.id}`);
-      // TODO: Redirecionar para a página da sessão ou recarregar lista de sessões
+      // Recarrega as sessões após criar
+      try {
+        const [sessoesMestre, sessoesJogador] = await Promise.all([
+          getSessoesMestre(),
+          getSessoesJogador()
+        ]);
+        const todasSessoes = [...sessoesMestre, ...sessoesJogador];
+        const sessoesUnicas = todasSessoes.filter((sessao, index, self) =>
+          index === self.findIndex((s) => s.id === sessao.id)
+        );
+        sessoesUnicas.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setSessoes(sessoesUnicas);
+      } catch (error) {
+        console.error("Erro ao recarregar sessões:", error);
+      }
       router.push(`/session/${sessao.id}`);
     } catch (error: unknown) {
       console.error("Erro ao criar sessão:", error);
@@ -123,13 +177,42 @@ export default function DashboardPage() {
   async function handleEntrarSessao(sessaoId: string) {
     try {
       await entrarSessao(sessaoId);
-      alert("Você entrou na sessão com sucesso!");
-      // TODO: Redirecionar para a página da sessão
+      // Recarrega as sessões após entrar
+      try {
+        const [sessoesMestre, sessoesJogador] = await Promise.all([
+          getSessoesMestre(),
+          getSessoesJogador()
+        ]);
+        const todasSessoes = [...sessoesMestre, ...sessoesJogador];
+        const sessoesUnicas = todasSessoes.filter((sessao, index, self) =>
+          index === self.findIndex((s) => s.id === sessao.id)
+        );
+        sessoesUnicas.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setSessoes(sessoesUnicas);
+      } catch (error) {
+        console.error("Erro ao recarregar sessões:", error);
+      }
       router.push(`/session/${sessaoId}`);
     } catch (error: unknown) {
       console.error("Erro ao entrar na sessão:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       alert("Erro ao entrar na sessão: " + errorMessage);
+    }
+  }
+
+  function handleOpenSessao(sessaoId: string) {
+    router.push(`/session/${sessaoId}`);
+  }
+
+  // Recarrega as fichas após deletar
+  async function handleFichaDeleted() {
+    try {
+      const fichasData = await getUserFichas();
+      setFichas(fichasData);
+    } catch (error) {
+      console.error("Erro ao recarregar fichas:", error);
     }
   }
 
@@ -209,11 +292,39 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="flex-1 pr-6 pt-6 pb-6 pl-0 overflow-y-auto bg-light">
+        {/* Tabs para alternar entre Fichas e Sessões */}
+        <div className="mb-6 border-b border-gray-200">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab("fichas")}
+              className={`px-4 py-2 font-semibold transition-colors ${
+                activeTab === "fichas"
+                  ? "text-black border-b-2 border-brand"
+                  : "text-secondary hover:text-black"
+              }`}
+            >
+              Minhas Fichas
+            </button>
+            <button
+              onClick={() => setActiveTab("sessoes")}
+              className={`px-4 py-2 font-semibold transition-colors ${
+                activeTab === "sessoes"
+                  ? "text-black border-b-2 border-brand"
+                  : "text-secondary hover:text-black"
+              }`}
+            >
+              Minhas Sessões
+            </button>
+          </div>
+        </div>
+
         {/* Título e conteúdo */}
         <div className="pl-0">
-          <h2 className="text-2xl font-bold mb-4 text-black pl-0">
-            Minhas Fichas
-          </h2>
+          {activeTab === "fichas" ? (
+            <>
+              <h2 className="text-2xl font-bold mb-4 text-black pl-0">
+                Minhas Fichas
+              </h2>
 
           {loadingFichas ? (
             <div className="flex items-center justify-center p-8">
@@ -279,6 +390,104 @@ export default function DashboardPage() {
               )}
             </div>
           )}
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-bold mb-4 text-black pl-0">
+                Minhas Sessões
+              </h2>
+
+              {loadingSessoes ? (
+                <div className="flex items-center justify-center p-8">
+                  <span className="text-lg animate-pulse text-secondary">
+                    Carregando sessões...
+                  </span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-0">
+                  {/* Lista de sessões */}
+                  {sessoes.length === 0 ? (
+                    <>
+                      <div className="col-span-full p-8 text-center">
+                        <p className="text-secondary">
+                          Nenhuma sessão encontrada. Clique no botão &quot;+&quot; para criar uma nova.
+                        </p>
+                      </div>
+                      {/* Botão de criar nova sessão */}
+                      <button
+                        className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                        onClick={() => setIsCriarSessaoModalOpen(true)}
+                      >
+                        <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
+                          +
+                        </div>
+                        <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                          Nova Sessão
+                        </p>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {sessoes.map((sessao) => (
+                        <div
+                          key={sessao.id}
+                          className="ficha-card"
+                          onClick={() => handleOpenSessao(sessao.id)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg font-semibold">
+                              {sessao.nome}
+                            </h3>
+                            {/* Badge de status */}
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${
+                                sessao.status === "ativa"
+                                  ? "bg-green-500/20 text-green-700"
+                                  : sessao.status === "pausada"
+                                  ? "bg-yellow-500/20 text-yellow-700"
+                                  : "bg-gray-500/20 text-gray-700"
+                              }`}
+                            >
+                              {sessao.status === "ativa"
+                                ? "Ativa"
+                                : sessao.status === "pausada"
+                                ? "Pausada"
+                                : "Encerrada"}
+                            </span>
+                          </div>
+                          {sessao.descricao && (
+                            <p className="text-sm text-secondary mb-2 line-clamp-2">
+                              {sessao.descricao}
+                            </p>
+                          )}
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-secondary">
+                              {sessao.ficha_ids?.length || 0} fichas
+                            </p>
+                            <p className="text-xs text-secondary">
+                              {new Date(sessao.created_at).toLocaleDateString("pt-BR")}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Botão de criar nova sessão */}
+                      <button
+                        className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                        onClick={() => setIsCriarSessaoModalOpen(true)}
+                      >
+                        <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
+                          +
+                        </div>
+                        <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                          Nova Sessão
+                        </p>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Modal com PDF */}
@@ -286,6 +495,7 @@ export default function DashboardPage() {
           isOpen={isModalOpen}
           onClose={handleModalClose}
           fichaId={selectedFichaId}
+          onDelete={handleFichaDeleted}
         />
 
         {/* Modal de Criar Sessão */}

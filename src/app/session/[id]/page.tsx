@@ -16,9 +16,10 @@ export default function SessionPage() {
   const [loading, setLoading] = useState(true);
   const [sessao, setSessao] = useState<Sessao | null>(null);
   const [loadingSessao, setLoadingSessao] = useState(false);
+  const [copied, setCopied] = useState(false);
   
   // Hook para gerenciar sessões
-  const { getSessao } = useSupabaseSessao();
+  const { getSessao, excluirSessao, cortarVinculosSessao } = useSupabaseSessao();
   const getSessaoRef = useRef(getSessao);
   useEffect(() => {
     getSessaoRef.current = getSessao;
@@ -26,6 +27,59 @@ export default function SessionPage() {
   
   // Verifica o papel do usuário na sessão
   const { loading: loadingPapel, isMestre, isJogador } = useSessaoRole(sessaoId);
+
+  // Função para copiar ID da sessão
+  function handleCopySessionId() {
+    if (!sessaoId) return;
+    
+    navigator.clipboard.writeText(sessaoId).then(() => {
+      setCopied(true);
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    }).catch((error) => {
+      console.error("Erro ao copiar ID:", error);
+      alert("Erro ao copiar ID da sessão. Por favor, copie manualmente: " + sessaoId);
+    });
+  }
+
+  // Função para excluir sessão (apenas mestre)
+  async function handleExcluirSessao() {
+    if (!sessaoId) return;
+    
+    if (!confirm("Tem certeza que deseja excluir esta sessão? Todos os jogadores serão removidos e esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    try {
+      await excluirSessao(sessaoId);
+      alert("Sessão excluída com sucesso!");
+      router.push("/dashboard");
+    } catch (error: unknown) {
+      console.error("Erro ao excluir sessão:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      alert("Erro ao excluir sessão: " + errorMessage);
+    }
+  }
+
+  // Função para cortar vínculos com a sessão (jogador)
+  async function handleCortarVinculos() {
+    if (!sessaoId) return;
+    
+    if (!confirm("Tem certeza que deseja sair permanentemente desta sessão? Você não poderá mais acessá-la.")) {
+      return;
+    }
+
+    try {
+      await cortarVinculosSessao(sessaoId);
+      alert("Você saiu da sessão permanentemente!");
+      router.push("/dashboard");
+    } catch (error: unknown) {
+      console.error("Erro ao cortar vínculos:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      alert("Erro ao cortar vínculos: " + errorMessage);
+    }
+  }
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -96,10 +150,35 @@ export default function SessionPage() {
               {sessao?.nome || "Carregando..."}
             </h1>
             {sessao?.descricao && (
-              <p className="text-sm text-primary opacity-80">
+              <p className="text-sm text-primary opacity-80 mb-4">
                 {sessao.descricao}
               </p>
             )}
+            
+            {/* ID da Sessão com botão de copiar */}
+            <div className="mt-4 p-3 rounded bg-brand-light/20 border border-brand-light/30">
+              <label className="block text-xs font-semibold text-primary opacity-70 mb-1">
+                ID da Sessão
+              </label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs text-primary font-mono break-all bg-brand-light/10 px-2 py-1 rounded">
+                  {sessaoId || "Carregando..."}
+                </code>
+                <button
+                  onClick={handleCopySessionId}
+                  className="px-3 py-1.5 rounded text-xs font-medium transition-colors bg-brand-light/30 text-primary hover:bg-brand-light/50 active:bg-brand-light/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={!sessaoId || copied}
+                  title={copied ? "Copiado!" : "Copiar ID"}
+                >
+                  {copied ? "✓" : "📋"}
+                </button>
+              </div>
+              {copied && (
+                <p className="text-xs text-primary opacity-60 mt-1">
+                  ID copiado!
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Botão voltar */}
@@ -109,6 +188,28 @@ export default function SessionPage() {
           >
             ← Voltar ao Dashboard
           </button>
+
+          {/* Botões de ação baseados no papel */}
+          {!loadingPapel && (isMestre || isJogador) && (
+            <div className="mb-4 space-y-2">
+              {isMestre && (
+                <button
+                  onClick={handleExcluirSessao}
+                  className="w-full px-4 py-2 rounded transition-colors bg-red-500/20 text-red-600 hover:bg-red-500/30 font-semibold"
+                >
+                   Excluir Sessão
+                </button>
+              )}
+              {isJogador && (
+                <button
+                  onClick={handleCortarVinculos}
+                  className="w-full px-4 py-2 rounded transition-colors bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 font-semibold"
+                >
+                  Sair da Sessão Permanentemente
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Informações do Papel */}
           {loadingPapel ? (

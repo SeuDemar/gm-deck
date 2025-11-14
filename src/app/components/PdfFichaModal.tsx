@@ -9,14 +9,16 @@ interface PdfFichaModalProps {
   isOpen: boolean;
   onClose: () => void;
   fichaId?: string; // ID da ficha para carregar dados existentes
+  onDelete?: () => void; // Callback após deletar a ficha
 }
 
-export default function PdfFichaModal({ isOpen, onClose, fichaId }: PdfFichaModalProps) {
+export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete }: PdfFichaModalProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [initialValues, setInitialValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
-  const { savePdfData, getPdfData } = useSupabasePdf();
+  const [deleting, setDeleting] = useState(false);
+  const { savePdfData, getPdfData, deleteFicha } = useSupabasePdf();
 
   // Usa ref para getPdfData para evitar re-renders desnecessários
   const getPdfDataRef = useRef(getPdfData);
@@ -55,17 +57,38 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId }: PdfFichaModa
     setValues(v);
   }, []);
 
-  async function salvarNoBanco() {
+  async function salvarFicha() {
     setLoading(true);
     try {
       await savePdfData(values, fichaId);
-      alert(fichaId ? "Ficha atualizada com sucesso!" : "Ficha salva no banco com sucesso!");
+      alert(fichaId ? "Ficha atualizada com sucesso!" : "Ficha salva com sucesso!");
       onClose();
     } catch (err) {
       console.error(err);
       alert("Erro ao salvar ficha. Veja o console para mais detalhes.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDeleteFicha() {
+    if (!fichaId) return;
+
+    if (!confirm("Tem certeza que deseja excluir esta ficha? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteFicha(fichaId);
+      alert("Ficha excluída com sucesso!");
+      onDelete?.(); // Chama o callback para recarregar a lista
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao excluir ficha. Veja o console para mais detalhes.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -91,20 +114,22 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId }: PdfFichaModa
         </div>
 
         {/* Botões */}
-        <div className="mt-4 flex gap-3">
+        <div className="mt-4 flex gap-3 justify-end">
+          {fichaId && (
+            <button
+              disabled={deleting || loading}
+              onClick={handleDeleteFicha}
+              className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {deleting ? "Excluindo..." : "Deletar Ficha"}
+            </button>
+          )}
           <button
-            onClick={() => console.log(values)}
-            className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+            disabled={loading || deleting}
+            onClick={salvarFicha}
+            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
           >
-            Ver campos no console
-          </button>
-
-          <button
-            disabled={loading}
-            onClick={salvarNoBanco}
-            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
-          >
-            {loading ? "Salvando..." : "Salvar no banco"}
+            {loading ? "Salvando..." : "Salvar Ficha"}
           </button>
         </div>
       </div>

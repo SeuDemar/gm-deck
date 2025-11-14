@@ -29,9 +29,9 @@
       "textSize": 12,
       "multiLine": false,
       "position": {
-        "left": -425,
-        "top": 73.36,
-        "width": 256,
+        "left": 90,
+        "top": 19.0,
+        "width": 190,
         "height": 28
       }
     },
@@ -43,9 +43,9 @@
       "textSize": 12,
       "multiLine": false,
       "position": {
-        "left": 20,
-        "top": 25.36,
-        "width": 114,
+        "left": 105,
+        "top": 19.0,
+        "width": 95,
         "height": 28
       }
     },
