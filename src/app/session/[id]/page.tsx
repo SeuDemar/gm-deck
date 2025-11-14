@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import { useSessaoRole } from "../../../hooks/useSessaoRole";
 import { Sessao, useSupabaseSessao } from "../../../hooks/useSupabaseSessao";
+import { useSupabasePdf } from "../../../hooks/useSupabasePdf";
+import PdfFichaModal from "../../components/PdfFichaModal";
 import "../../globals.css";
 
 export default function SessionPage() {
@@ -17,13 +19,45 @@ export default function SessionPage() {
   const [sessao, setSessao] = useState<Sessao | null>(null);
   const [loadingSessao, setLoadingSessao] = useState(false);
   const [copied, setCopied] = useState(false);
+  interface JogadorSessao {
+    id: string;
+    sessao_id: string;
+    usuario_id: string;
+    ficha_id: string | null;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    ficha: {
+      id: string;
+      personagem: string | null;
+    } | null;
+  }
+
+  interface FichaSessao {
+    id: string;
+    personagem: string | null;
+    created_at: string;
+    updated_at: string;
+  }
+
+  const [jogadores, setJogadores] = useState<JogadorSessao[]>([]);
+  const [loadingJogadores, setLoadingJogadores] = useState(false);
+  const [fichasSessao, setFichasSessao] = useState<FichaSessao[]>([]);
+  const [loadingFichasSessao, setLoadingFichasSessao] = useState(false);
+  const [fichasMestre, setFichasMestre] = useState<FichaSessao[]>([]);
+  const [loadingFichasMestre, setLoadingFichasMestre] = useState(false);
+  const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(undefined);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Hook para gerenciar sessões
-  const { getSessao, excluirSessao, cortarVinculosSessao } = useSupabaseSessao();
+  const { getSessao, excluirSessao, cortarVinculosSessao, getJogadoresSessao } = useSupabaseSessao();
   const getSessaoRef = useRef(getSessao);
   useEffect(() => {
     getSessaoRef.current = getSessao;
   }, [getSessao]);
+  
+  // Hook para buscar fichas
+  const { getUserFichas } = useSupabasePdf();
   
   // Verifica o papel do usuário na sessão
   const { loading: loadingPapel, isMestre, isJogador } = useSessaoRole(sessaoId);
@@ -129,6 +163,99 @@ export default function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sessaoId]);
 
+  // Carrega jogadores da sessão (apenas para mestre)
+  useEffect(() => {
+    async function loadJogadores() {
+      if (!user || !sessaoId || !isMestre) {
+        setJogadores([]);
+        return;
+      }
+
+      setLoadingJogadores(true);
+      try {
+        const jogadoresData = await getJogadoresSessao(sessaoId);
+        setJogadores(jogadoresData || []);
+      } catch (error) {
+        console.error("Erro ao carregar jogadores:", error);
+      } finally {
+        setLoadingJogadores(false);
+      }
+    }
+
+    if (!loadingPapel) {
+      loadJogadores();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sessaoId, isMestre, loadingPapel]);
+
+  // Carrega fichas do jogador na sessão (apenas para jogador)
+  useEffect(() => {
+    async function loadFichasJogador() {
+      if (!user || !sessaoId || !isJogador || !sessao) {
+        setFichasSessao([]);
+        return;
+      }
+
+      setLoadingFichasSessao(true);
+      try {
+        // Busca as fichas do usuário atual
+        const todasFichas = await getUserFichas();
+        
+        // Filtra apenas as fichas que estão na sessão (ficha_ids)
+        const fichasNaSessao = todasFichas.filter(ficha => 
+          sessao.ficha_ids && sessao.ficha_ids.includes(ficha.id)
+        );
+        
+        setFichasSessao(fichasNaSessao);
+      } catch (error) {
+        console.error("Erro ao carregar fichas do jogador:", error);
+      } finally {
+        setLoadingFichasSessao(false);
+      }
+    }
+
+    if (!loadingPapel && sessao) {
+      loadFichasJogador();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sessaoId, isJogador, sessao, loadingPapel]);
+
+  // Carrega todas as fichas da sessão (apenas para mestre)
+  useEffect(() => {
+    async function loadFichasMestre() {
+      if (!user || !sessaoId || !isMestre || !sessao || !sessao.ficha_ids || sessao.ficha_ids.length === 0) {
+        setFichasMestre([]);
+        return;
+      }
+
+      setLoadingFichasMestre(true);
+      try {
+        // Busca as fichas pelos IDs
+        const { data, error } = await supabase
+          .from("ficha")
+          .select("id, personagem, created_at, updated_at")
+          .in("id", sessao.ficha_ids)
+          .order("personagem", { ascending: true });
+
+        if (error) {
+          console.error("Erro ao carregar fichas da sessão:", error);
+          throw error;
+        }
+
+        setFichasMestre(data || []);
+      } catch (error) {
+        console.error("Erro ao carregar fichas do mestre:", error);
+      } finally {
+        setLoadingFichasMestre(false);
+      }
+    }
+
+    if (!loadingPapel && sessao) {
+      loadFichasMestre();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sessaoId, isMestre, sessao, loadingPapel]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-light">
@@ -231,16 +358,38 @@ export default function SessionPage() {
                 <h2 className="text-lg font-semibold mb-4 text-primary">
                   Jogadores
                 </h2>
-                {loadingSessao ? (
+                {loadingJogadores ? (
                   <p className="text-sm text-primary opacity-60">
                     Carregando jogadores...
                   </p>
+                ) : jogadores.length === 0 ? (
+                  <p className="text-sm text-primary opacity-60">
+                    Nenhum jogador na sessão ainda.
+                  </p>
                 ) : (
                   <div className="space-y-2">
-                    {/* TODO: Listar jogadores da sessão */}
-                    <p className="text-sm text-primary opacity-60">
-                      Lista de jogadores aparecerá aqui
-                    </p>
+                    {jogadores.map((jogador) => (
+                      <div
+                        key={jogador.id}
+                        className="p-2 rounded bg-brand-light/20 border border-brand-light/30"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-primary">
+                              {jogador.usuario_id === user?.id ? "Você" : "Jogador"}
+                            </p>
+                            {jogador.ficha && (
+                              <p className="text-xs text-primary opacity-70 mt-1">
+                                Ficha: {jogador.ficha.personagem || "Sem nome"}
+                              </p>
+                            )}
+                            <p className="text-xs text-primary opacity-60 mt-1">
+                              Status: {jogador.status === "aceito" ? "Aceito" : jogador.status === "pendente" ? "Pendente" : "Recusado"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -340,10 +489,64 @@ export default function SessionPage() {
                     </p>
                   </div>
                   
-                  {/* TODO: Funcionalidades do mestre */}
-                  <p className="text-secondary">
-                    Funcionalidades do mestre aparecerão aqui.
-                  </p>
+                  {/* Estatísticas da Sessão */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-lg bg-primary shadow-md">
+                      <p className="text-sm text-secondary mb-1">Total de Jogadores</p>
+                      <p className="text-2xl font-bold text-black">{jogadores.filter(j => j.status === "aceito").length}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-primary shadow-md">
+                      <p className="text-sm text-secondary mb-1">Total de Fichas</p>
+                      <p className="text-2xl font-bold text-black">{sessao?.ficha_ids?.length || 0}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-primary shadow-md">
+                      <p className="text-sm text-secondary mb-1">Status</p>
+                      <p className="text-2xl font-bold text-black capitalize">{sessao?.status || "Ativa"}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Lista de Fichas da Sessão - Mestre vê todas */}
+                  {sessao?.ficha_ids && sessao.ficha_ids.length > 0 && (
+                    <div className="p-4 rounded-lg bg-primary shadow-md">
+                      <h3 className="text-lg font-semibold mb-4 text-black">
+                        Fichas da Sessão ({sessao.ficha_ids.length})
+                      </h3>
+                      {loadingFichasMestre ? (
+                        <div className="flex items-center justify-center p-8">
+                          <span className="text-lg animate-pulse text-secondary">
+                            Carregando fichas...
+                          </span>
+                        </div>
+                      ) : fichasMestre.length === 0 ? (
+                        <p className="text-secondary text-sm">
+                          Nenhuma ficha encontrada.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {fichasMestre.map((ficha) => (
+                            <div
+                              key={ficha.id}
+                              className="ficha-card cursor-pointer"
+                              onClick={() => {
+                                setSelectedFichaId(ficha.id);
+                                setIsModalOpen(true);
+                              }}
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-lg font-semibold">
+                                  {ficha.personagem || "Sem nome"}
+                                </h3>
+                              </div>
+                              <p className="text-sm">
+                                Criada em:{" "}
+                                {new Date(ficha.created_at).toLocaleDateString("pt-BR")}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -355,20 +558,74 @@ export default function SessionPage() {
                       Área do Jogador
                     </h3>
                     <p className="text-secondary text-sm">
-                      Você está participando desta sessão como jogador. Suas fichas aparecerão aqui.
+                      Você está participando desta sessão como jogador. Suas fichas vinculadas à sessão aparecem abaixo.
                     </p>
                   </div>
                   
-                  {/* TODO: Fichas do jogador */}
-                  <p className="text-secondary">
-                    Suas fichas aparecerão aqui.
-                  </p>
+                  {/* Lista de Fichas do Jogador na Sessão */}
+                  {loadingFichasSessao ? (
+                    <div className="flex items-center justify-center p-8">
+                      <span className="text-lg animate-pulse text-secondary">
+                        Carregando fichas...
+                      </span>
+                    </div>
+                  ) : fichasSessao.length === 0 ? (
+                    <div className="p-4 rounded-lg bg-primary shadow-md">
+                      <p className="text-secondary">
+                        Você ainda não tem fichas vinculadas a esta sessão.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {fichasSessao.map((ficha) => (
+                        <div
+                          key={ficha.id}
+                          className="ficha-card cursor-pointer"
+                          onClick={() => {
+                            setSelectedFichaId(ficha.id);
+                            setIsModalOpen(true);
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg font-semibold">
+                              {ficha.personagem || "Sem nome"}
+                            </h3>
+                          </div>
+                          <p className="text-sm">
+                            Criada em:{" "}
+                            {new Date(ficha.created_at).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       </main>
+
+      {/* Modal com PDF para visualizar/editar fichas */}
+      <PdfFichaModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedFichaId(undefined);
+        }}
+        fichaId={selectedFichaId}
+        onDelete={() => {
+          // Recarrega as fichas após deletar
+          if (isJogador && sessao) {
+            getUserFichas().then((todasFichas) => {
+              const fichasNaSessao = todasFichas.filter(ficha => 
+                sessao.ficha_ids && sessao.ficha_ids.includes(ficha.id)
+              );
+              setFichasSessao(fichasNaSessao);
+            }).catch(console.error);
+          }
+        }}
+      />
     </div>
   );
 }
