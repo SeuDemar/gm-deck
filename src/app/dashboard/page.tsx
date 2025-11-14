@@ -6,14 +6,32 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
 import PdfFichaModal from "../components/PdfFichaModal";
+import CriarSessaoModal from "../components/CriarSessaoModal";
+import EntrarSessaoModal from "../components/EntrarSessaoModal";
+import { useSupabasePdf } from "../../hooks/useSupabasePdf";
+import { useSupabaseSessao } from "../../hooks/useSupabaseSessao";
+
+type FichaListItem = {
+  id: string;
+  personagem: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { getUserFichas } = useSupabasePdf();
+  const { criarSessao, entrarSessao } = useSupabaseSessao();
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCriarSessaoModalOpen, setIsCriarSessaoModalOpen] = useState(false);
+  const [isEntrarSessaoModalOpen, setIsEntrarSessaoModalOpen] = useState(false);
+  const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(undefined);
+  const [fichas, setFichas] = useState<FichaListItem[]>([]);
+  const [loadingFichas, setLoadingFichas] = useState(false);
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -41,6 +59,78 @@ export default function DashboardPage() {
     return () => subscription.unsubscribe();
   }, [router]);
 
+  // Carrega as fichas do usuário quando ele estiver logado
+  useEffect(() => {
+    async function loadFichas() {
+      if (!user) return;
+      
+      try {
+        setLoadingFichas(true);
+        const fichasData = await getUserFichas();
+        setFichas(fichasData);
+      } catch (error) {
+        console.error("Erro ao carregar fichas:", error);
+      } finally {
+        setLoadingFichas(false);
+      }
+    }
+
+    loadFichas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Abre o modal para criar uma nova ficha
+  function handleOpenNewFicha() {
+    setSelectedFichaId(undefined);
+    setIsModalOpen(true);
+  }
+
+  // Abre o modal para editar uma ficha existente
+  function handleOpenEditFicha(fichaId: string) {
+    setSelectedFichaId(fichaId);
+    setIsModalOpen(true);
+  }
+
+  // Recarrega as fichas quando o modal for fechado (após salvar uma nova)
+  async function handleModalClose() {
+    setIsModalOpen(false);
+    setSelectedFichaId(undefined);
+    // Recarrega as fichas após fechar o modal
+    try {
+      setLoadingFichas(true);
+      const fichasData = await getUserFichas();
+      setFichas(fichasData);
+    } catch (error) {
+      console.error("Erro ao recarregar fichas:", error);
+    } finally {
+      setLoadingFichas(false);
+    }
+  }
+
+  async function handleCriarSessao(nome: string, descricao?: string) {
+    try {
+      const sessao = await criarSessao(nome, descricao);
+      alert(`Sessão "${nome}" criada com sucesso! ID: ${sessao.id}`);
+      // TODO: Redirecionar para a página da sessão ou recarregar lista de sessões
+      router.push(`/session/${sessao.id}`);
+    } catch (error: any) {
+      console.error("Erro ao criar sessão:", error);
+      alert("Erro ao criar sessão: " + (error.message || "Erro desconhecido"));
+    }
+  }
+
+  async function handleEntrarSessao(sessaoId: string) {
+    try {
+      await entrarSessao(sessaoId);
+      alert("Você entrou na sessão com sucesso!");
+      // TODO: Redirecionar para a página da sessão
+      router.push(`/session/${sessaoId}`);
+    } catch (error: any) {
+      console.error("Erro ao entrar na sessão:", error);
+      alert("Erro ao entrar na sessão: " + (error.message || "Erro desconhecido"));
+    }
+  }
+
   async function handleLogout() {
     try {
       await supabase.auth.signOut();
@@ -54,14 +144,8 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div
-        className="flex items-center justify-center h-screen"
-        style={{ backgroundColor: "var(--color-background-light)" }}
-      >
-        <span
-          style={{ color: "var(--color-text-secondary)" }}
-          className="text-lg animate-pulse"
-        >
+      <div className="flex items-center justify-center h-screen bg-light">
+        <span className="text-lg animate-pulse text-secondary">
           Carregando...
         </span>
       </div>
@@ -73,31 +157,16 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen min-h-screen">
       {/* Sidebar */}
-      <aside
-        className="w-64 flex flex-col justify-between"
-        style={{
-          backgroundColor: "var(--color-brand)",
-          color: "var(--color-text-primary)",
-        }}
-      >
+      <aside className="w-64 flex flex-col justify-between bg-brand text-primary">
         <div className="p-4">
           {/* Avatar e nome */}
           <div className="flex flex-col items-center mb-8">
-            <div
-              className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold"
-              style={{
-                backgroundColor: "var(--color-text-primary)",
-                color: "var(--color-brand)",
-              }}
-            >
+            <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-primary text-brand">
               {user?.user_metadata?.full_name
                 ? getInitialAvatar(user.user_metadata.full_name)
                 : "?"}
             </div>
-            <p
-              className="mt-2 text-center font-semibold"
-              style={{ color: "var(--color-text-primary)" }} // texto branco
-            >
+            <p className="mt-2 text-center font-semibold text-primary">
               {user?.user_metadata?.full_name || user?.email || "Usuário"}
             </p>
           </div>
@@ -105,35 +174,21 @@ export default function DashboardPage() {
           {/* Navegação */}
           <nav className="flex flex-col gap-2">
             <button
-              className="px-4 py-2 rounded transition-colors"
-              style={{
-                backgroundColor: "transparent",
-                color: "var(--color-text-primary)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor =
-                  "var(--color-brand-light)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "transparent")
-              }
+              onClick={() => setIsCriarSessaoModalOpen(true)}
+              className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light"
             >
-              Mesas Ativas
+              Criar Sessão
             </button>
             <button
-              className="px-4 py-2 rounded transition-colors"
-              style={{
-                backgroundColor: "transparent",
-                color: "var(--color-text-primary)",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.backgroundColor =
-                  "var(--color-brand-light)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.backgroundColor = "transparent")
-              }
+              onClick={() => setIsEntrarSessaoModalOpen(true)}
+              className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light"
             >
+              Entrar em Sessão
+            </button>
+            <button className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light">
+              Minhas Sessões
+            </button>
+            <button className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light">
               Minhas Fichas
             </button>
           </nav>
@@ -143,19 +198,7 @@ export default function DashboardPage() {
         <div className="p-4">
           <button
             onClick={handleLogout}
-            className="w-full px-4 py-2 rounded transition-colors font-semibold"
-            style={{
-              backgroundColor: "var(--color-brand-accent)",
-              color: "var(--color-text-primary)",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor =
-                "var(--color-brand-salmon)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor =
-                "var(--color-brand-accent)")
-            }
+            className="w-full px-4 py-2 rounded transition-colors font-semibold bg-brand-accent text-primary hover:bg-brand-salmon"
           >
             Sair
           </button>
@@ -163,26 +206,98 @@ export default function DashboardPage() {
       </aside>
 
       {/* Main Content */}
-      <main
-        className="flex-1 p-6 overflow-y-auto relative"
-        style={{ backgroundColor: "var(--color-background-light)" }}
-      >
-        {/* Botão de adicionar ficha */}
-        <button
-          className="absolute left-15 top-12 w-40 h-40 flex items-center justify-center rounded-2xl shadow-md text-6xl font-extrabold hover:opacity-90 transition-all"
-          style={{
-            backgroundColor: "var(--color-brand)",
-            color: "var(--color-text-primary)",
-          }}
-          onClick={() => setIsModalOpen(true)}
-        >
-          +
-        </button>
+      <main className="flex-1 pr-6 pt-6 pb-6 pl-0 overflow-y-auto bg-light">
+        {/* Título e conteúdo */}
+        <div className="pl-0">
+          <h2 className="text-2xl font-bold mb-4 text-black pl-0">
+            Minhas Fichas
+          </h2>
+
+          {loadingFichas ? (
+            <div className="flex items-center justify-center p-8">
+              <span className="text-lg animate-pulse text-secondary">
+                Carregando fichas...
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-0">
+              {/* Lista de fichas */}
+              {fichas.length === 0 ? (
+                <>
+                  <div className="col-span-full p-8 text-center">
+                    <p className="text-secondary">
+                      Nenhuma ficha encontrada. Clique no botão "+" para criar uma nova.
+                    </p>
+                  </div>
+                  {/* Botão de adicionar nova ficha */}
+                  <button
+                    className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                    onClick={handleOpenNewFicha}
+                  >
+                    <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
+                      +
+                    </div>
+                    <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                      Nova Ficha
+                    </p>
+                  </button>
+                </>
+              ) : (
+                <>
+                  {fichas.map((ficha) => (
+                    <div
+                      key={ficha.id}
+                      className="ficha-card"
+                      onClick={() => handleOpenEditFicha(ficha.id)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-semibold">
+                          {ficha.personagem || "Sem nome"}
+                        </h3>
+                      </div>
+                      <p className="text-sm">
+                        Criada em:{" "}
+                        {new Date(ficha.created_at).toLocaleDateString("pt-BR")}
+                      </p>
+                    </div>
+                  ))}
+                  {/* Botão de adicionar nova ficha */}
+                  <button
+                    className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                    onClick={handleOpenNewFicha}
+                  >
+                    <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
+                      +
+                    </div>
+                    <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                      Nova Ficha
+                    </p>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Modal com PDF */}
         <PdfFichaModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={handleModalClose}
+          fichaId={selectedFichaId}
+        />
+
+        {/* Modal de Criar Sessão */}
+        <CriarSessaoModal
+          isOpen={isCriarSessaoModalOpen}
+          onClose={() => setIsCriarSessaoModalOpen(false)}
+          onCreateSessao={handleCriarSessao}
+        />
+
+        {/* Modal de Entrar em Sessão */}
+        <EntrarSessaoModal
+          isOpen={isEntrarSessaoModalOpen}
+          onClose={() => setIsEntrarSessaoModalOpen(false)}
+          onEntrarSessao={handleEntrarSessao}
         />
       </main>
     </div>

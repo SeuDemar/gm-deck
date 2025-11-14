@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Modal from "./Modal";
 import PdfJsViewer from "./PdfJsViewer";
 import { useSupabasePdf } from "@/hooks/useSupabasePdf";
@@ -8,12 +8,46 @@ import { useSupabasePdf } from "@/hooks/useSupabasePdf";
 interface PdfFichaModalProps {
   isOpen: boolean;
   onClose: () => void;
+  fichaId?: string; // ID da ficha para carregar dados existentes
 }
 
-export default function PdfFichaModal({ isOpen, onClose }: PdfFichaModalProps) {
+export default function PdfFichaModal({ isOpen, onClose, fichaId }: PdfFichaModalProps) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [initialValues, setInitialValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const { savePdfData } = useSupabasePdf();
+  const [loadingData, setLoadingData] = useState(false);
+  const { savePdfData, getPdfData } = useSupabasePdf();
+
+  // Usa ref para getPdfData para evitar re-renders desnecessários
+  const getPdfDataRef = useRef(getPdfData);
+  useEffect(() => {
+    getPdfDataRef.current = getPdfData;
+  }, [getPdfData]);
+
+  // Carrega os dados da ficha quando o modal abrir com um fichaId
+  useEffect(() => {
+    async function loadFichaData() {
+      if (!isOpen || !fichaId) {
+        setInitialValues({});
+        return;
+      }
+
+      try {
+        setLoadingData(true);
+        const fichaData = await getPdfDataRef.current(fichaId);
+        if (fichaData) {
+          setInitialValues(fichaData);
+          setValues(fichaData); // Também define os valores atuais
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados da ficha:", error);
+      } finally {
+        setLoadingData(false);
+      }
+    }
+
+    loadFichaData();
+  }, [isOpen, fichaId]);
 
   // Callback disparado pelo viewer quando coleta valores
   // useCallback evita que a função seja recriada a cada render
@@ -24,8 +58,8 @@ export default function PdfFichaModal({ isOpen, onClose }: PdfFichaModalProps) {
   async function salvarNoBanco() {
     setLoading(true);
     try {
-      await savePdfData(values);
-      alert("Ficha salva no banco com sucesso!");
+      await savePdfData(values, fichaId);
+      alert(fichaId ? "Ficha atualizada com sucesso!" : "Ficha salva no banco com sucesso!");
       onClose();
     } catch (err) {
       console.error(err);
@@ -43,10 +77,17 @@ export default function PdfFichaModal({ isOpen, onClose }: PdfFichaModalProps) {
 
         {/* PDF Viewer ocupa o restante da tela */}
         <div className="flex-1 min-h-0 overflow-auto rounded-md border p-2 bg-white">
-          <PdfJsViewer
-            pdfUrl={encodeURI("/fichas/FichaOrdem.pdf")}
-            onValues={handleValues}
-          />
+          {loadingData ? (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-lg">Carregando dados da ficha...</span>
+            </div>
+          ) : (
+            <PdfJsViewer
+              pdfUrl={encodeURI("/fichas/FichaOrdem.pdf")}
+              onValues={handleValues}
+              initialValues={initialValues}
+            />
+          )}
         </div>
 
         {/* Botões */}

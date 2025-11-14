@@ -1,0 +1,338 @@
+"use client";
+
+import { supabase } from "../../lib/supabaseClient";
+
+export type SessaoStatus = "ativa" | "encerrada" | "pausada";
+export type JogadorStatus = "pendente" | "aceito" | "recusado";
+
+export interface Sessao {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  mestre_id: string;
+  status: SessaoStatus;
+  ficha_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessaoJogador {
+  id: string;
+  sessao_id: string;
+  usuario_id: string;
+  ficha_id: string | null;
+  status: JogadorStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+// 🪝 Hook principal para gerenciar sessões
+export function useSupabaseSessao() {
+  // --- Criar sessão
+  async function criarSessao(nome: string, descricao?: string) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    const { data, error } = await supabase
+      .from("sessao")
+      .insert([{
+        nome,
+        descricao: descricao || null,
+        mestre_id: user.id,
+        status: "ativa",
+        ficha_ids: []
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Erro ao criar sessão:", error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  // --- Buscar sessões do mestre
+  async function getSessoesMestre() {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    const { data, error } = await supabase
+      .from("sessao")
+      .select("*")
+      .eq("mestre_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao buscar sessões do mestre:", error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  // --- Buscar sessões onde o usuário é jogador
+  async function getSessoesJogador() {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    const { data, error } = await supabase
+      .from("sessao_jogador")
+      .select(`
+        *,
+        sessao:sessao_id (*)
+      `)
+      .eq("usuario_id", user.id)
+      .eq("status", "aceito")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao buscar sessões do jogador:", error);
+      throw error;
+    }
+
+    return (data || []).map((item: any) => item.sessao);
+  }
+
+  // --- Buscar sessão específica
+  async function getSessao(sessaoId: string): Promise<Sessao | null> {
+    const { data, error } = await supabase
+      .from("sessao")
+      .select("*")
+      .eq("id", sessaoId)
+      .single();
+
+    if (error) {
+      console.error("Erro ao buscar sessão:", error);
+      return null;
+    }
+
+    return data;
+  }
+
+  // --- Buscar jogadores da sessão
+  async function getJogadoresSessao(sessaoId: string) {
+    const { data, error } = await supabase
+      .from("sessao_jogador")
+      .select(`
+        *,
+        ficha:ficha_id (id, personagem)
+      `)
+      .eq("sessao_id", sessaoId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao buscar jogadores da sessão:", error);
+      throw error;
+    }
+
+    return data || [];
+  }
+
+  // --- Adicionar jogador à sessão (mestre convida jogador)
+  async function adicionarJogador(sessaoId: string, usuarioId: string, fichaId?: string) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Verifica se o usuário é o mestre da sessão
+    const { data: sessao, error: checkError } = await supabase
+      .from("sessao")
+      .select("mestre_id")
+      .eq("id", sessaoId)
+      .single();
+
+    if (checkError || !sessao || sessao.mestre_id !== user.id) {
+      throw new Error("Você não tem permissão para adicionar jogadores nesta sessão.");
+    }
+
+    const { data, error } = await supabase
+      .from("sessao_jogador")
+      .insert([{
+        sessao_id: sessaoId,
+        usuario_id: usuarioId,
+        ficha_id: fichaId || null,
+        status: "pendente"
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Erro ao adicionar jogador:", error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  // --- Entrar em sessão (jogador aceita convite ou mestre adiciona diretamente)
+  async function entrarSessao(sessaoId: string, fichaId?: string) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Verifica se já existe um registro na sessão_jogador
+    const { data: existing, error: checkError } = await supabase
+      .from("sessao_jogador")
+      .select("*")
+      .eq("sessao_id", sessaoId)
+      .eq("usuario_id", user.id)
+      .single();
+
+    if (existing && !checkError) {
+      // Se já existe, atualiza o status para aceito e ficha_id se fornecida
+      const { data, error } = await supabase
+        .from("sessao_jogador")
+        .update({
+          status: "aceito",
+          ficha_id: fichaId || existing.ficha_id
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Erro ao atualizar convite:", error);
+        throw error;
+      }
+
+      // Atualiza o array ficha_ids na sessão se fichaId foi fornecido
+      if (fichaId) {
+        await atualizarFichaIdsSessao(sessaoId);
+      }
+
+      return data;
+    } else {
+      // Se não existe, cria um novo registro
+      const { data, error } = await supabase
+        .from("sessao_jogador")
+        .insert([{
+          sessao_id: sessaoId,
+          usuario_id: user.id,
+          ficha_id: fichaId || null,
+          status: "aceito"
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Erro ao entrar na sessão:", error);
+        throw error;
+      }
+
+      // Atualiza o array ficha_ids na sessão se fichaId foi fornecido
+      if (fichaId) {
+        await atualizarFichaIdsSessao(sessaoId);
+      }
+
+      return data;
+    }
+  }
+
+  // --- Atualizar array ficha_ids na sessão
+  async function atualizarFichaIdsSessao(sessaoId: string) {
+    // Busca todas as fichas dos jogadores aceitos na sessão
+    const { data: jogadores, error } = await supabase
+      .from("sessao_jogador")
+      .select("ficha_id")
+      .eq("sessao_id", sessaoId)
+      .eq("status", "aceito")
+      .not("ficha_id", "is", null);
+
+    if (error) {
+      console.error("Erro ao buscar fichas da sessão:", error);
+      return;
+    }
+
+    // Extrai os IDs das fichas (remove nulls)
+    const fichaIds = (jogadores || [])
+      .map((j: any) => j.ficha_id)
+      .filter((id: string | null) => id !== null) as string[];
+
+    // Remove duplicatas
+    const fichaIdsUnicos = [...new Set(fichaIds)];
+
+    // Atualiza o array na sessão
+    const { error: updateError } = await supabase
+      .from("sessao")
+      .update({ ficha_ids: fichaIdsUnicos })
+      .eq("id", sessaoId);
+
+    if (updateError) {
+      console.error("Erro ao atualizar ficha_ids da sessão:", updateError);
+      throw updateError;
+    }
+  }
+
+  // --- Remover jogador da sessão
+  async function removerJogador(sessaoJogadorId: string) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Verifica se é o mestre ou o próprio jogador
+    const { data: sessaoJogador, error: fetchError } = await supabase
+      .from("sessao_jogador")
+      .select(`
+        *,
+        sessao:sessao_id (mestre_id)
+      `)
+      .eq("id", sessaoJogadorId)
+      .single();
+
+    if (fetchError || !sessaoJogador) {
+      throw new Error("Convite não encontrado.");
+    }
+
+    const sessao = sessaoJogador.sessao as any;
+    const podeRemover = sessao.mestre_id === user.id || sessaoJogador.usuario_id === user.id;
+
+    if (!podeRemover) {
+      throw new Error("Você não tem permissão para remover este jogador.");
+    }
+
+    const sessaoId = sessaoJogador.sessao_id;
+
+    const { error } = await supabase
+      .from("sessao_jogador")
+      .delete()
+      .eq("id", sessaoJogadorId);
+
+    if (error) {
+      console.error("Erro ao remover jogador:", error);
+      throw error;
+    }
+
+    // Atualiza o array ficha_ids na sessão
+    await atualizarFichaIdsSessao(sessaoId);
+  }
+
+  return {
+    criarSessao,
+    getSessoesMestre,
+    getSessoesJogador,
+    getSessao,
+    getJogadoresSessao,
+    adicionarJogador,
+    entrarSessao,
+    removerJogador,
+    atualizarFichaIdsSessao
+  };
+}
+
