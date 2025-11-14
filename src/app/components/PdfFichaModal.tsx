@@ -24,7 +24,7 @@ export default function PdfFichaModal({ isOpen, onClose }: PdfFichaModalProps) {
   async function salvarNoBanco() {
     setLoading(true);
     try {
-      await savePdfData(values as Record<string, string>);
+      await savePdfData(values);
       alert("Ficha salva no banco com sucesso!");
       onClose();
     } catch (err) {
