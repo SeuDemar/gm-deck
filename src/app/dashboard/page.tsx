@@ -5,7 +5,7 @@ import "../globals.css";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
-import Modal from "../components/Modal";
+import PdfFichaModal from "../components/PdfFichaModal";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -180,12 +180,10 @@ export default function DashboardPage() {
         </button>
 
         {/* Modal com PDF */}
-        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-          <iframe
-            src="/fichas/FichaOrdem.pdf#zoom=150"
-            className="w-full h-full rounded-xl"
-          />
-        </Modal>
+        <PdfFichaModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+        />
       </main>
     </div>
   );
