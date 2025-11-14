@@ -8,6 +8,43 @@ interface Props {
   initialValues?: Record<string, string>; // Valores iniciais para popular os campos
 }
 
+interface FieldPosition {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface FieldOption {
+  exportValue?: string;
+  displayValue?: string;
+  value?: string;
+}
+
+interface FieldData {
+  name: string;
+  type: string;
+  fieldType: string;
+  fieldValue?: string | boolean;
+  defaultValue?: string;
+  textSize?: number;
+  multiLine?: boolean;
+  page?: number;
+  pageNum?: number;
+  position?: FieldPosition;
+  options?: FieldOption[];
+  checkbox?: boolean;
+  checkBox?: boolean;
+  adjustments?: {
+    left?: number;
+    top?: number;
+    width?: number;
+    height?: number;
+  };
+  buttonValue?: string;
+  fontFamily?: string;
+}
+
 export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [pdfLoaded, setPdfLoaded] = useState(false);
@@ -60,11 +97,17 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
     let mounted = true;
 
     async function init() {
-      // Importa pdf.js
+      // Importa pdf.js de forma dinâmica
       const pdfjsLib = await import("pdfjs-dist");
 
-      // Configura worker
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf-js/pdf.worker.mjs";
+      // Configura worker ANTES de qualquer operação com PDF
+      // Usa worker local da pasta public com URL absoluta
+      if (typeof window !== "undefined") {
+        // Constrói URL absoluta para o worker local
+        // Isso garante que funcione tanto em dev quanto em produção
+        const workerUrl = new URL("/pdf-js/pdf.worker.mjs", window.location.origin).href;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+      }
 
       const container = containerRef.current;
       if (!container) return;
@@ -72,7 +115,7 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
       container.innerHTML = "";
 
       // Carrega o mapeamento de coordenadas PRIMEIRO (em pixels)
-      let coordinatesMap: Record<string, any> = {};
+      let coordinatesMap: Record<string, FieldData> = {};
       try {
         const response = await fetch("/data/ficha-coordinates-pixels.json");
         if (response.ok) {
@@ -135,7 +178,7 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
 
 
         // Renderiza campos de formulário DIRETAMENTE DO JSON
-        Object.entries(coordinatesMap).forEach(([fieldName, fieldData]: [string, any]) => {
+        Object.entries(coordinatesMap).forEach(([fieldName, fieldData]: [string, FieldData]) => {
           try {
             // Verifica se o campo pertence a esta página
             let fieldPage = fieldData.page || fieldData.pageNum;
@@ -198,7 +241,7 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
               input = document.createElement("select");
               const options = fieldData.options;
               if (options && Array.isArray(options)) {
-                options.forEach((opt: any) => {
+                options.forEach((opt: FieldOption) => {
                   const option = document.createElement("option");
                   option.value = opt.exportValue || opt.displayValue || opt.value || "";
                   option.textContent = opt.displayValue || opt.exportValue || opt.value || "";
@@ -221,9 +264,10 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
               } else {
                 input.type = "button";
                 const initialValue = initialValuesRef.current?.[fieldName];
+                const fieldValue = fieldData.fieldValue !== undefined ? String(fieldData.fieldValue) : "";
                 input.value = initialValue !== undefined 
                   ? String(initialValue) 
-                  : (fieldData.fieldValue || fieldData.buttonValue || "");
+                  : (fieldValue || fieldData.buttonValue || "");
               }
             } else {
               input = document.createElement("input");
@@ -235,9 +279,10 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
             if (input.type !== "checkbox" && input.type !== "button") {
               // Prioriza initialValues (dados do banco), depois fieldValue (do JSON), depois defaultValue
               const initialValue = initialValuesRef.current?.[fieldName];
+              const fieldValue = fieldData.fieldValue !== undefined ? String(fieldData.fieldValue) : "";
               input.value = initialValue !== undefined 
                 ? String(initialValue) 
-                : (fieldData.fieldValue || fieldData.defaultValue || "");
+                : (fieldValue || fieldData.defaultValue || "");
             }
               
             // Posiciona o campo

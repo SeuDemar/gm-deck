@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabaseClient";
 import { useSessaoRole } from "../../../hooks/useSessaoRole";
+import { Sessao, useSupabaseSessao } from "../../../hooks/useSupabaseSessao";
 import "../../globals.css";
 
 export default function SessionPage() {
@@ -13,11 +14,18 @@ export default function SessionPage() {
 
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sessao, setSessao] = useState<any>(null);
+  const [sessao, setSessao] = useState<Sessao | null>(null);
   const [loadingSessao, setLoadingSessao] = useState(false);
   
+  // Hook para gerenciar sessões
+  const { getSessao } = useSupabaseSessao();
+  const getSessaoRef = useRef(getSessao);
+  useEffect(() => {
+    getSessaoRef.current = getSessao;
+  }, [getSessao]);
+  
   // Verifica o papel do usuário na sessão
-  const { papel, loading: loadingPapel, isMestre, isJogador } = useSessaoRole(sessaoId);
+  const { loading: loadingPapel, isMestre, isJogador } = useSessaoRole(sessaoId);
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -52,14 +60,10 @@ export default function SessionPage() {
 
       setLoadingSessao(true);
       try {
-        // TODO: Buscar dados da sessão do banco de dados
-        console.log("Carregar sessão:", sessaoId);
-        // Por enquanto, apenas simula
-        setSessao({
-          id: sessaoId,
-          nome: "Sessão de Exemplo",
-          descricao: "Descrição da sessão",
-        });
+        const sessaoData = await getSessaoRef.current(sessaoId);
+        if (sessaoData) {
+          setSessao(sessaoData);
+        }
       } catch (error) {
         console.error("Erro ao carregar sessão:", error);
       } finally {
@@ -68,6 +72,7 @@ export default function SessionPage() {
     }
 
     loadSessao();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sessaoId]);
 
   if (loading) {

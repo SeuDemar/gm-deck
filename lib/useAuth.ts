@@ -9,7 +9,7 @@ export function useAuth() {
 
   useEffect(() => {
     // Checa a sessão atual
-    const session = supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null)
       setLoading(false)
     })

@@ -101,7 +101,7 @@ export function useSupabaseSessao() {
       throw error;
     }
 
-    return (data || []).map((item: any) => item.sessao);
+    return (data || []).map((item: { sessao: Sessao }) => item.sessao);
   }
 
   // --- Buscar sessão específica
@@ -260,7 +260,7 @@ export function useSupabaseSessao() {
 
     // Extrai os IDs das fichas (remove nulls)
     const fichaIds = (jogadores || [])
-      .map((j: any) => j.ficha_id)
+      .map((j: { ficha_id: string | null }) => j.ficha_id)
       .filter((id: string | null) => id !== null) as string[];
 
     // Remove duplicatas
@@ -300,7 +300,7 @@ export function useSupabaseSessao() {
       throw new Error("Convite não encontrado.");
     }
 
-    const sessao = sessaoJogador.sessao as any;
+    const sessao = sessaoJogador.sessao as { mestre_id: string };
     const podeRemover = sessao.mestre_id === user.id || sessaoJogador.usuario_id === user.id;
 
     if (!podeRemover) {

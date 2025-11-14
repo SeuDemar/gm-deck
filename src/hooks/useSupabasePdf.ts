@@ -20,7 +20,7 @@ export function useSupabasePdf() {
 
     // Cria um objeto onde cada chave do fields vira uma coluna no banco
     // O nome do campo (chave) será o nome da coluna
-    const dataToSave: Record<string, any> = {};
+    const dataToSave: Record<string, string | null> = {};
     
     // Converte cada campo para sua respectiva coluna
     Object.entries(fields).forEach(([fieldName, fieldValue]) => {

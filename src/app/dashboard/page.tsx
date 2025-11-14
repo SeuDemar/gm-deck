@@ -113,9 +113,10 @@ export default function DashboardPage() {
       alert(`Sessão "${nome}" criada com sucesso! ID: ${sessao.id}`);
       // TODO: Redirecionar para a página da sessão ou recarregar lista de sessões
       router.push(`/session/${sessao.id}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao criar sessão:", error);
-      alert("Erro ao criar sessão: " + (error.message || "Erro desconhecido"));
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      alert("Erro ao criar sessão: " + errorMessage);
     }
   }
 
@@ -125,9 +126,10 @@ export default function DashboardPage() {
       alert("Você entrou na sessão com sucesso!");
       // TODO: Redirecionar para a página da sessão
       router.push(`/session/${sessaoId}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao entrar na sessão:", error);
-      alert("Erro ao entrar na sessão: " + (error.message || "Erro desconhecido"));
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      alert("Erro ao entrar na sessão: " + errorMessage);
     }
   }
 
@@ -226,7 +228,7 @@ export default function DashboardPage() {
                 <>
                   <div className="col-span-full p-8 text-center">
                     <p className="text-secondary">
-                      Nenhuma ficha encontrada. Clique no botão "+" para criar uma nova.
+                      Nenhuma ficha encontrada. Clique no botão &quot;+&quot; para criar uma nova.
                     </p>
                   </div>
                   {/* Botão de adicionar nova ficha */}

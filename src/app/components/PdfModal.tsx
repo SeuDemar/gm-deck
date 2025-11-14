@@ -17,8 +17,8 @@ export default function PdfModal({
   isOpen,
   onClose,
   pdfUrl,
-  pdfId,
-  userId,
+  pdfId: _pdfId,
+  userId: _userId,
 }: Props) {
   const { savePdfData } = useSupabasePdf();
   const [fields, setFields] = useState<Record<string, string>>({});
