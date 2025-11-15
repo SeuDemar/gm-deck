@@ -5,9 +5,11 @@ import "../globals.css";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
+import { getFotoPerfilUrl, getSignedUrl } from "../../../lib/storageUtils";
 import PdfFichaModal from "../components/PdfFichaModal";
 import CriarSessaoModal from "../components/CriarSessaoModal";
 import EntrarSessaoModal from "../components/EntrarSessaoModal";
+import EditarPerfilModal from "../components/EditarPerfilModal";
 import { useSupabasePdf } from "../../hooks/useSupabasePdf";
 import { useSupabaseSessao, Sessao } from "../../hooks/useSupabaseSessao";
 
@@ -29,12 +31,14 @@ export default function DashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCriarSessaoModalOpen, setIsCriarSessaoModalOpen] = useState(false);
   const [isEntrarSessaoModalOpen, setIsEntrarSessaoModalOpen] = useState(false);
+  const [isEditarPerfilModalOpen, setIsEditarPerfilModalOpen] = useState(false);
   const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(undefined);
   const [fichas, setFichas] = useState<FichaListItem[]>([]);
   const [loadingFichas, setLoadingFichas] = useState(false);
   const [sessoes, setSessoes] = useState<Sessao[]>([]);
   const [loadingSessoes, setLoadingSessoes] = useState(false);
   const [activeTab, setActiveTab] = useState<"fichas" | "sessoes">("fichas");
+  const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -61,6 +65,35 @@ export default function DashboardPage() {
 
     return () => subscription.unsubscribe();
   }, [router]);
+
+  // Carrega a foto de perfil do bucket
+  useEffect(() => {
+    async function loadFotoPerfil() {
+      if (!user?.id) {
+        setFotoPerfilUrl(null);
+        return;
+      }
+
+      console.log("🔍 Carregando foto de perfil para usuário:", user.id);
+      try {
+        const url = await getFotoPerfilUrl(user.id, user.user_metadata?.foto_perfil_url);
+        console.log("✅ URL da foto obtida:", url);
+        if (url) {
+          setFotoPerfilUrl(url);
+        } else {
+          console.log("⚠️ Nenhuma foto encontrada no bucket");
+          setFotoPerfilUrl(null);
+        }
+      } catch (error) {
+        console.error("❌ Erro ao carregar foto de perfil:", error);
+        setFotoPerfilUrl(null);
+      }
+    }
+
+    if (user?.id) {
+      loadFotoPerfil();
+    }
+  }, [user?.id]); // Re-executa apenas quando o ID do usuário mudar
 
   // Carrega as fichas do usuário quando ele estiver logado
   useEffect(() => {
@@ -246,11 +279,47 @@ export default function DashboardPage() {
         <div className="p-4">
           {/* Avatar e nome */}
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-primary text-brand">
-              {user?.user_metadata?.full_name
-                ? getInitialAvatar(user.user_metadata.full_name)
-                : "?"}
-            </div>
+            {fotoPerfilUrl ? (
+              <img
+                src={fotoPerfilUrl}
+                alt="Foto de perfil"
+                className="w-16 h-16 rounded-full object-cover border-2 border-primary"
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  // Se a imagem falhar ao carregar, tenta usar signed URL
+                  console.error("Erro ao carregar foto de perfil com URL pública:", fotoPerfilUrl);
+                  const img = e.target as HTMLImageElement;
+                  // Tenta usar signed URL como fallback
+                  if (user?.id) {
+                    getSignedUrl(user.id, fotoPerfilUrl).then((signedUrl) => {
+                      if (signedUrl) {
+                        img.src = signedUrl;
+                        console.log("Tentando carregar com signed URL:", signedUrl);
+                      } else {
+                        img.style.display = "none";
+                        setFotoPerfilUrl(null);
+                      }
+                    }).catch(() => {
+                      img.style.display = "none";
+                      setFotoPerfilUrl(null);
+                    });
+                  } else {
+                    img.style.display = "none";
+                    setFotoPerfilUrl(null);
+                  }
+                }}
+                onLoad={() => {
+                  console.log("✅ Foto de perfil carregada com sucesso!");
+                }}
+              />
+            ) : null}
+            {!fotoPerfilUrl && (
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-primary text-brand">
+                {user?.user_metadata?.full_name
+                  ? getInitialAvatar(user.user_metadata.full_name)
+                  : "?"}
+              </div>
+            )}
             <p className="mt-2 text-center font-semibold text-primary">
               {user?.user_metadata?.full_name || user?.email || "Usuário"}
             </p>
@@ -270,11 +339,11 @@ export default function DashboardPage() {
             >
               Entrar em Sessão
             </button>
-            <button className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light">
-              Minhas Sessões
-            </button>
-            <button className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light">
-              Minhas Fichas
+            <button
+              onClick={() => setIsEditarPerfilModalOpen(true)}
+              className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light"
+            >
+              Editar Perfil
             </button>
           </nav>
         </div>
@@ -428,48 +497,64 @@ export default function DashboardPage() {
                     </>
                   ) : (
                     <>
-                      {sessoes.map((sessao) => (
-                        <div
-                          key={sessao.id}
-                          className="ficha-card"
-                          onClick={() => handleOpenSessao(sessao.id)}
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-lg font-semibold">
-                              {sessao.nome}
-                            </h3>
-                            {/* Badge de status */}
-                            <span
-                              className={`text-xs px-2 py-1 rounded ${
-                                sessao.status === "ativa"
-                                  ? "bg-green-500/20 text-green-700"
+                      {sessoes.map((sessao) => {
+                        const isMestre = sessao.mestre_id === user?.id;
+                        return (
+                          <div
+                            key={sessao.id}
+                            className={`ficha-card relative ${
+                              isMestre
+                                ? "ring-2 ring-brand bg-brand/5 border-brand/30"
+                                : ""
+                            }`}
+                            onClick={() => handleOpenSessao(sessao.id)}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className={`text-lg font-semibold ${isMestre ? "text-brand" : ""}`}>
+                                    {sessao.nome}
+                                  </h3>
+                                  {isMestre && (
+                                    <span className="bg-brand text-primary text-xs font-bold px-2 py-1 rounded-full">
+                                      Mestre
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Badge de status */}
+                              <span
+                                className={`text-xs px-2 py-1 rounded ${
+                                  sessao.status === "ativa"
+                                    ? "bg-green-500/20 text-green-700"
+                                    : sessao.status === "pausada"
+                                    ? "bg-yellow-500/20 text-yellow-700"
+                                    : "bg-gray-500/20 text-gray-700"
+                                }`}
+                              >
+                                {sessao.status === "ativa"
+                                  ? "Ativa"
                                   : sessao.status === "pausada"
-                                  ? "bg-yellow-500/20 text-yellow-700"
-                                  : "bg-gray-500/20 text-gray-700"
-                              }`}
-                            >
-                              {sessao.status === "ativa"
-                                ? "Ativa"
-                                : sessao.status === "pausada"
-                                ? "Pausada"
-                                : "Encerrada"}
-                            </span>
+                                  ? "Pausada"
+                                  : "Encerrada"}
+                              </span>
+                            </div>
+                            {sessao.descricao && (
+                              <p className="text-sm text-secondary mb-2 line-clamp-2">
+                                {sessao.descricao}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between mt-2">
+                              <p className="text-xs text-secondary">
+                                {sessao.ficha_ids?.length || 0} fichas
+                              </p>
+                              <p className="text-xs text-secondary">
+                                {new Date(sessao.created_at).toLocaleDateString("pt-BR")}
+                              </p>
+                            </div>
                           </div>
-                          {sessao.descricao && (
-                            <p className="text-sm text-secondary mb-2 line-clamp-2">
-                              {sessao.descricao}
-                            </p>
-                          )}
-                          <div className="flex items-center justify-between mt-2">
-                            <p className="text-xs text-secondary">
-                              {sessao.ficha_ids?.length || 0} fichas
-                            </p>
-                            <p className="text-xs text-secondary">
-                              {new Date(sessao.created_at).toLocaleDateString("pt-BR")}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {/* Botão de criar nova sessão */}
                       <button
                         className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
@@ -510,6 +595,27 @@ export default function DashboardPage() {
           isOpen={isEntrarSessaoModalOpen}
           onClose={() => setIsEntrarSessaoModalOpen(false)}
           onEntrarSessao={handleEntrarSessao}
+        />
+
+        {/* Modal de Editar Perfil */}
+        <EditarPerfilModal
+          isOpen={isEditarPerfilModalOpen}
+          onClose={() => setIsEditarPerfilModalOpen(false)}
+          user={user}
+          onUpdate={async () => {
+            // Recarrega o usuário para atualizar os dados exibidos
+            const { data: { user: updatedUser } } = await supabase.auth.getUser();
+            if (updatedUser) {
+              setUser(updatedUser);
+              // Recarrega a foto de perfil do bucket
+              try {
+                const url = await getFotoPerfilUrl(updatedUser.id, updatedUser.user_metadata?.foto_perfil_url);
+                setFotoPerfilUrl(url);
+              } catch (error) {
+                console.error("Erro ao recarregar foto de perfil:", error);
+              }
+            }
+          }}
         />
       </main>
     </div>

@@ -300,6 +300,14 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
             input.style.boxSizing = "border-box";
             input.style.fontFamily = fieldData.fontFamily || "inherit";
             
+            // Centraliza o texto nos campos de texto (não em selects, checkboxes ou botões)
+            if (input.type === "text" || input.tagName === "TEXTAREA") {
+              input.style.textAlign = "center";
+            } else if (input.tagName === "SELECT") {
+              // Para selects, centraliza o texto dentro das opções
+              input.style.textAlign = "center";
+            }
+            
             // Debug para o campo "forca"
             if (fieldName === "forca") {
               console.log(`%c🔍 Debug campo "forca":`, "color: #FF5722; font-size: 14px; font-weight: bold;");

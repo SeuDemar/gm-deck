@@ -50,74 +50,74 @@
       }
     },
     "agilidade": {
-      "name": "agilidade",
-      "type": "Tx",
-      "fieldType": "Tx",
-      "fieldValue": "",
-      "textSize": 12,
-      "multiLine": false,
-      "position": {
-        "left": -252,
-        "top": 179.16,
-        "width": 68,
-        "height": 56
-      }
-    },
+        "name": "agilidade",
+        "type": "Tx",
+        "fieldType": "Tx",
+        "fieldValue": "",
+        "textSize": 30,
+        "multiLine": false,
+        "position": {
+          "left": -76,
+          "top": 115,
+          "width": 68,
+          "height": 56
+        }
+      },
     "intelecto": {
-      "name": "intelecto",
-      "type": "Tx",
-      "fieldType": "Tx",
-      "fieldValue": "",
-      "textSize": 12,
-      "multiLine": false,
-      "position": {
-        "left": -126,
-        "top": 263.16,
-        "width": 68,
-        "height": 56
-      }
-    },
+        "name": "intelecto",
+        "type": "Tx",
+        "fieldType": "Tx",
+        "fieldValue": "",
+        "textSize": 30,
+        "multiLine": false,
+        "position": {
+          "left": -49.05,
+          "top": 180,
+          "width": 68,
+          "height": 56
+        }
+      },
     "forca": {
-      "name": "forca",
-      "type": "Tx",
-      "fieldType": "Tx",
-      "fieldValue": "",
-      "textSize": 12,
-      "multiLine": false,
-      "position": {
-        "left": -395,
-        "top": 170,
-        "width": 68,
-        "height": 56
-      }
-    },
+        "name": "forca",
+        "type": "Tx",
+        "fieldType": "Tx",
+        "fieldValue": "",
+        "textSize": 30,
+        "multiLine": false,
+        "position": {
+          "left": -307.5,
+          "top": 180,
+          "width": 68,
+          "height": 56
+        }
+      },
     "presenca": {
-      "name": "presenca",
-      "type": "Tx",
-      "fieldType": "Tx",
-      "fieldValue": "",
-      "textSize": 12,
-      "multiLine": false,
-      "position": {
-        "left": -344,
-        "top": 417.36,
-        "width": 68,
-        "height": 56
-      }
-    },
+        "name": "presenca",
+        "type": "Tx",
+        "fieldType": "Tx",
+        "fieldValue": "",
+        "textSize": 30,
+        "multiLine": false,
+        "position": {
+          "left": -349.50,
+          "top": 292,
+          "width": 68,
+          "height": 56
+        }
+      },
     "vigor": {
-      "name": "vigor",
-      "type": "Tx",
-      "fieldType": "Tx",
-      "fieldValue": "",
-      "textSize": 12,
-      "multiLine": false,
-      "position": {
-        "left": -162,
-        "top": 418.36,
-        "width": 68,
-        "height": 56
-      }
+        "name": "vigor",
+        "type": "Tx",
+        "fieldType": "Tx",
+        "fieldValue": "",
+        "textSize": 30,
+        "multiLine": false,
+        "position": {
+          "left": -280.5,
+          "top": 292,
+          "width": 68,
+          "height": 56
+        }
     },
     "origem": {
       "name": "origem",
