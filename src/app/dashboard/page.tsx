@@ -315,10 +315,10 @@ export default function DashboardPage() {
             ) : null}
             {!fotoPerfilUrl && (
               <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-primary text-brand">
-                {user?.user_metadata?.full_name
-                  ? getInitialAvatar(user.user_metadata.full_name)
-                  : "?"}
-              </div>
+              {user?.user_metadata?.full_name
+                ? getInitialAvatar(user.user_metadata.full_name)
+                : "?"}
+            </div>
             )}
             <p className="mt-2 text-center font-semibold text-primary">
               {user?.user_metadata?.full_name || user?.email || "Usuário"}
@@ -556,7 +556,7 @@ export default function DashboardPage() {
                         );
                       })}
                       {/* Botão de criar nova sessão */}
-                      <button
+        <button
                         className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
                         onClick={() => setIsCriarSessaoModalOpen(true)}
                       >
@@ -566,7 +566,7 @@ export default function DashboardPage() {
                         <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
                           Nova Sessão
                         </p>
-                      </button>
+        </button>
                     </>
                   )}
                 </div>

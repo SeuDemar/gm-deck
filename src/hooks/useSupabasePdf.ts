@@ -111,6 +111,29 @@ export function useSupabasePdf() {
     return fichaData;
   }
 
+  // --- Verificar se a ficha pertence ao usuário atual
+  async function isFichaOwner(fichaId: string): Promise<boolean> {
+    // Obtém o usuário atual logado
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return false;
+    }
+
+    // Busca o usuarioId da ficha
+    const { data, error } = await supabase
+      .from("ficha")
+      .select("usuarioId")
+      .eq("id", fichaId)
+      .single();
+
+    if (error || !data) {
+      return false;
+    }
+
+    return data.usuarioId === user.id;
+  }
+
   // --- Buscar fichas do usuário logado
   // Retorna todas as fichas do usuário atual, ordenadas por "personagem" em ordem ascendente
   async function getUserFichas() {
@@ -159,5 +182,5 @@ export function useSupabasePdf() {
     }
   }
 
-  return { savePdfData, getPdfData, getUserFichas, deleteFicha };
+  return { savePdfData, getPdfData, getUserFichas, deleteFicha, isFichaOwner };
 }

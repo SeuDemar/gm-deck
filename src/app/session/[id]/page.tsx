@@ -47,12 +47,16 @@ export default function SessionPage() {
   const [jogadores, setJogadores] = useState<JogadorSessao[]>([]);
   const [loadingJogadores, setLoadingJogadores] = useState(false);
   const [fotosPerfil, setFotosPerfil] = useState<Record<string, string | null>>({});
+  const [mestreData, setMestreData] = useState<{ id: string; nome: string | null; apelido: string | null } | null>(null);
+  const [fotoMestre, setFotoMestre] = useState<string | null>(null);
+  const [loadingMestre, setLoadingMestre] = useState(false);
   const [fichasSessao, setFichasSessao] = useState<FichaSessao[]>([]);
   const [loadingFichasSessao, setLoadingFichasSessao] = useState(false);
   const [fichasMestre, setFichasMestre] = useState<FichaSessao[]>([]);
   const [loadingFichasMestre, setLoadingFichasMestre] = useState(false);
   const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(undefined);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(false);
   const [isEditarSessaoModalOpen, setIsEditarSessaoModalOpen] = useState(false);
   
   // Hook para gerenciar sessões
@@ -63,7 +67,7 @@ export default function SessionPage() {
   }, [getSessao]);
   
   // Hook para buscar fichas
-  const { getUserFichas } = useSupabasePdf();
+  const { getUserFichas, isFichaOwner } = useSupabasePdf();
   
   // Verifica o papel do usuário na sessão
   const { loading: loadingPapel, isMestre, isJogador } = useSessaoRole(sessaoId);
@@ -211,10 +215,88 @@ export default function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sessaoId, isMestre, loadingPapel]);
 
-  // Carrega jogadores da sessão (apenas para mestre)
+  // Carrega dados do mestre (para jogador ver)
+  useEffect(() => {
+    async function loadMestre() {
+      // Se não é jogador ou ainda está carregando o papel, não precisa carregar
+      if (!isJogador || loadingPapel) {
+        if (isMestre) {
+          setMestreData(null);
+          setFotoMestre(null);
+        }
+        return;
+      }
+
+      if (!sessaoId || !sessao || !sessao.mestre_id) {
+        console.log("Não foi possível carregar mestre - faltando dados:", { sessaoId, sessao: !!sessao, mestre_id: sessao?.mestre_id });
+        return;
+      }
+
+      // Se o usuário é o mestre, não precisa carregar
+      if (isMestre) {
+        setMestreData(null);
+        setFotoMestre(null);
+        return;
+      }
+
+      console.log("Carregando dados do mestre:", sessao.mestre_id);
+
+      setLoadingMestre(true);
+      try {
+        // Busca perfil do mestre - mesma abordagem que getJogadoresSessao
+        const { data: perfilData } = await supabase
+          .from("perfil")
+          .select("id, nome, apelido")
+          .eq("id", sessao.mestre_id)
+          .single();
+
+        if (perfilData) {
+          console.log("Dados do mestre encontrados:", { nome: perfilData.nome, apelido: perfilData.apelido });
+          setMestreData({
+            id: perfilData.id,
+            nome: perfilData.nome,
+            apelido: perfilData.apelido,
+          });
+        } else {
+          console.warn("Perfil do mestre não encontrado na tabela perfil");
+          setMestreData({
+            id: sessao.mestre_id,
+            nome: null,
+            apelido: null,
+          });
+        }
+
+        // Busca foto de perfil do mestre
+        try {
+          const fotoUrl = await getFotoPerfilUrl(sessao.mestre_id, null);
+          setFotoMestre(fotoUrl);
+        } catch (error) {
+          console.error("Erro ao carregar foto do mestre:", error);
+          setFotoMestre(null);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar perfil do mestre:", error);
+        setMestreData({
+          id: sessao.mestre_id,
+          nome: null,
+          apelido: null,
+        });
+        setFotoMestre(null);
+      } finally {
+        setLoadingMestre(false);
+      }
+    }
+
+    if (!loadingPapel && sessao) {
+      loadMestre();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessaoId, sessao, isMestre, isJogador, loadingPapel]);
+
+  // Carrega jogadores da sessão (para mestre e jogador)
   useEffect(() => {
     async function loadJogadores() {
-      if (!user || !sessaoId || !isMestre) {
+      if (!user || !sessaoId || (!isMestre && !isJogador)) {
         setJogadores([]);
         return;
       }
@@ -247,7 +329,7 @@ export default function SessionPage() {
       loadJogadores();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, sessaoId, isMestre, loadingPapel]);
+  }, [user, sessaoId, isMestre, isJogador, loadingPapel]);
 
   const [fichaSelecionadaId, setFichaSelecionadaId] = useState<string | null>(null);
   const [loadingFichaSelecionada, setLoadingFichaSelecionada] = useState(false);
@@ -701,8 +783,13 @@ export default function SessionPage() {
                             <div
                               key={ficha.id}
                               className="ficha-card cursor-pointer"
-                              onClick={() => {
+                              onClick={async () => {
                                 setSelectedFichaId(ficha.id);
+                                // Verifica se a ficha pertence ao usuário (mestre pode ver todas, mas só edita as próprias)
+                                if (ficha.id) {
+                                  const isOwner = await isFichaOwner(ficha.id);
+                                  setIsReadOnly(!isOwner);
+                                }
                                 setIsModalOpen(true);
                               }}
                             >
@@ -731,13 +818,187 @@ export default function SessionPage() {
                     <h3 className="text-lg font-semibold mb-2 text-black">
                       Área do Jogador
                     </h3>
-                    <p className="text-secondary text-sm">
+                    <p className="text-black text-sm opacity-80">
                       Selecione uma de suas fichas para usar nesta sessão. Você pode editar suas fichas clicando nelas.
                     </p>
                     {fichaSelecionadaId && (
                       <p className="text-sm text-green-600 mt-2 font-medium">
                         ✓ Ficha selecionada para esta sessão
                       </p>
+                    )}
+                  </div>
+
+                  {/* Card do Mestre - Separado dos jogadores */}
+                  {isJogador && (
+                    <div className="p-4 rounded-lg bg-primary shadow-md">
+                      <h3 className="text-lg font-semibold mb-4 text-black">
+                        Mestre da Sessão
+                      </h3>
+                      {loadingMestre ? (
+                        <div className="flex items-center justify-center p-4">
+                          <span className="text-sm animate-pulse text-secondary">
+                            Carregando dados do mestre...
+                          </span>
+                        </div>
+                      ) : mestreData ? (
+                        <div className="ficha-card bg-primary border border-gray-200">
+                          <div className="flex items-start gap-4">
+                            {/* Foto de perfil */}
+                            <div className="flex-shrink-0">
+                              {fotoMestre ? (
+                                <img
+                                  src={fotoMestre}
+                                  alt={mestreData.apelido || mestreData.nome || "Mestre"}
+                                  className="w-16 h-16 rounded-full object-cover border-2 border-brand"
+                                  onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
+                                    img.style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-brand text-primary border-2 border-brand">
+                                  {mestreData.apelido || mestreData.nome
+                                    ? (mestreData.apelido || mestreData.nome || "M")[0].toUpperCase()
+                                    : "M"}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Informações do mestre */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                {mestreData.apelido || mestreData.nome ? (
+                                  <h3 className="text-lg font-semibold text-black truncate">
+                                    {mestreData.apelido || mestreData.nome}
+                                  </h3>
+                                ) : null}
+                                <span className="bg-brand text-primary text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">
+                                  Mestre
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-lg bg-gray-100">
+                          <p className="text-sm text-secondary">
+                            Carregando informações do mestre...
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Lista de Jogadores - Jogador também vê outros jogadores */}
+                  <div className="p-4 rounded-lg bg-primary shadow-md">
+                    <h3 className="text-lg font-semibold mb-4 text-black">
+                      Jogadores da Sessão ({jogadores.length})
+                    </h3>
+                    {loadingJogadores ? (
+                      <div className="flex items-center justify-center p-8">
+                        <span className="text-lg animate-pulse text-secondary">
+                          Carregando jogadores...
+                        </span>
+                      </div>
+                    ) : jogadores.length === 0 ? (
+                      <p className="text-secondary text-sm">
+                        Nenhum jogador na sessão ainda.
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {jogadores.map((jogador) => {
+                          const fotoPerfil = fotosPerfil[jogador.usuario_id];
+                          const displayName = jogador.apelido || jogador.nome || "Jogador";
+                          const isCurrentUser = jogador.usuario_id === user?.id;
+                          
+                          // Função para obter inicial do nome
+                          const getInitial = (name: string) => {
+                            return name.charAt(0).toUpperCase();
+                          };
+
+                          return (
+                            <div
+                              key={jogador.usuario_id}
+                              className="ficha-card bg-primary border border-gray-200"
+                            >
+                              <div className="flex items-start gap-4">
+                                {/* Foto de perfil */}
+                                <div className="flex-shrink-0">
+                                  {fotoPerfil ? (
+                                    <img
+                                      src={fotoPerfil}
+                                      alt={displayName}
+                                      className="w-16 h-16 rounded-full object-cover border-2 border-brand"
+                                      onError={(e) => {
+                                        const img = e.target as HTMLImageElement;
+                                        img.style.display = "none";
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-brand text-primary border-2 border-brand">
+                                      {displayName ? getInitial(displayName) : "?"}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Informações do jogador */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-lg font-semibold text-black truncate">
+                                      {displayName}
+                                    </h3>
+                                    {isCurrentUser && (
+                                      <span className="bg-brand text-primary text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">
+                                        Você
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Personagem */}
+                                  {jogador.ficha ? (
+                                    <div className="mb-2">
+                                      <p className="text-sm text-secondary mb-1">
+                                        <span className="font-medium">Personagem:</span>
+                                      </p>
+                                      <p className="text-base font-semibold text-black">
+                                        {jogador.ficha.personagem || "Sem nome"}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm text-secondary italic mb-2">
+                                      Nenhuma ficha selecionada
+                                    </p>
+                                  )}
+
+                                  {/* Status */}
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <span
+                                      className={`text-xs px-2 py-1 rounded font-medium ${
+                                        jogador.status === "aceito"
+                                          ? "bg-green-500/20 text-green-700"
+                                          : jogador.status === "pendente"
+                                          ? "bg-yellow-500/20 text-yellow-700"
+                                          : "bg-red-500/20 text-red-700"
+                                      }`}
+                                    >
+                                      {jogador.status === "aceito"
+                                        ? "✓ Aceito"
+                                        : jogador.status === "pendente"
+                                        ? "⏳ Pendente"
+                                        : "✗ Recusado"}
+                                    </span>
+                                    {jogador.nome && !jogador.apelido && (
+                                      <p className="text-xs text-secondary truncate">
+                                        {jogador.nome}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                   
@@ -780,8 +1041,13 @@ export default function SessionPage() {
                             )}
                             <div
                               className="flex-1"
-                              onClick={() => {
+                              onClick={async () => {
                                 setSelectedFichaId(ficha.id);
+                                // Verifica se a ficha pertence ao usuário
+                                if (ficha.id) {
+                                  const isOwner = await isFichaOwner(ficha.id);
+                                  setIsReadOnly(!isOwner);
+                                }
                                 setIsModalOpen(true);
                               }}
                             >
@@ -861,8 +1127,10 @@ export default function SessionPage() {
         onClose={() => {
           setIsModalOpen(false);
           setSelectedFichaId(undefined);
+          setIsReadOnly(false);
         }}
         fichaId={selectedFichaId}
+        readOnly={isReadOnly}
         onDelete={async () => {
           // Recarrega as fichas após deletar
           if (isJogador) {

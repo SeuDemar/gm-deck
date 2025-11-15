@@ -10,9 +10,10 @@ interface PdfFichaModalProps {
   onClose: () => void;
   fichaId?: string; // ID da ficha para carregar dados existentes
   onDelete?: () => void; // Callback após deletar a ficha
+  readOnly?: boolean; // Se true, desabilita edição e exclusão da ficha
 }
 
-export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete }: PdfFichaModalProps) {
+export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete, readOnly = false }: PdfFichaModalProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [initialValues, setInitialValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -109,29 +110,39 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete }: Pd
               pdfUrl={encodeURI("/fichas/FichaOrdem.pdf")}
               onValues={handleValues}
               initialValues={initialValues}
+              readOnly={readOnly}
             />
           )}
         </div>
 
-        {/* Botões */}
-        <div className="mt-4 flex gap-3 justify-end">
-          {fichaId && (
+        {/* Botões - apenas se não for readOnly */}
+        {!readOnly && (
+          <div className="mt-4 flex gap-3 justify-end">
+            {fichaId && (
+              <button
+                disabled={deleting || loading}
+                onClick={handleDeleteFicha}
+                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? "Excluindo..." : "Deletar Ficha"}
+              </button>
+            )}
             <button
-              disabled={deleting || loading}
-              onClick={handleDeleteFicha}
-              className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              disabled={loading || deleting}
+              onClick={salvarFicha}
+              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
-              {deleting ? "Excluindo..." : "Deletar Ficha"}
+              {loading ? "Salvando..." : "Salvar Ficha"}
             </button>
-          )}
-          <button
-            disabled={loading || deleting}
-            onClick={salvarFicha}
-            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Salvando..." : "Salvar Ficha"}
-          </button>
-        </div>
+          </div>
+        )}
+        {readOnly && (
+          <div className="mt-4 flex justify-center">
+            <p className="text-sm text-gray-600 italic">
+              Modo somente leitura - Esta ficha pertence a outro jogador
+            </p>
+          </div>
+        )}
       </div>
     </Modal>
   );

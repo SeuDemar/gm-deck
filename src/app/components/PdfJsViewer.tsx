@@ -6,6 +6,7 @@ interface Props {
   pdfUrl: string;
   onValues?: (values: Record<string, string>) => void;
   initialValues?: Record<string, string>; // Valores iniciais para popular os campos
+  readOnly?: boolean; // Se true, desabilita edição dos campos
 }
 
 interface FieldPosition {
@@ -45,7 +46,7 @@ interface FieldData {
   fontFamily?: string;
 }
 
-export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) {
+export default function PdfJsViewer({ pdfUrl, onValues, initialValues, readOnly = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [pdfLoaded, setPdfLoaded] = useState(false);
 
@@ -187,7 +188,7 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
             if (!fieldData.position || typeof fieldData.position !== 'object') {
               console.warn(`Campo ${fieldName} não tem position definido`);
               return;
-            }
+        }
 
             // Usa position (pixels) diretamente
             let left = fieldData.position.left || 0;
@@ -209,74 +210,74 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
             
             // Se não é esta página, pula
             if (fieldPage !== pageNum) return;
-            
-            // Aplica ajustes finos do mapeamento se disponíveis
+              
+              // Aplica ajustes finos do mapeamento se disponíveis
             if (fieldData.adjustments) {
               left += fieldData.adjustments.left || 0;
               top += fieldData.adjustments.top || 0;
               width += (fieldData.adjustments.width || 0);
               height += (fieldData.adjustments.height || 0);
-            }
-
+              }
+              
             // Se não está na primeira página, ajusta o top
             if (fieldPage > 1) {
               // Para páginas seguintes, precisa subtrair a altura acumulada das páginas anteriores
               const accumulatedHeight = (fieldPage - 1) * viewport.height;
               top -= accumulatedHeight;
-            }
+              }
               
             // Cria o elemento HTML baseado no tipo de campo DO JSON
-            let input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+              let input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
             const fieldType = fieldData.type || "Tx"; // Padrão: textfield
-            
-            if (fieldType === "Tx") {
+              
+              if (fieldType === "Tx") {
               if (fieldData.multiLine) {
-                input = document.createElement("textarea");
-                (input as HTMLTextAreaElement).rows = Math.max(1, Math.floor(height / 16));
-              } else {
-                input = document.createElement("input");
-                input.type = "text";
-              }
-            } else if (fieldType === "Ch") {
-              input = document.createElement("select");
+                  input = document.createElement("textarea");
+                  (input as HTMLTextAreaElement).rows = Math.max(1, Math.floor(height / 16));
+                } else {
+                  input = document.createElement("input");
+                  input.type = "text";
+                }
+              } else if (fieldType === "Ch") {
+                input = document.createElement("select");
               const options = fieldData.options;
-              if (options && Array.isArray(options)) {
+                if (options && Array.isArray(options)) {
                 options.forEach((opt: FieldOption) => {
-                  const option = document.createElement("option");
+                    const option = document.createElement("option");
                   option.value = opt.exportValue || opt.displayValue || opt.value || "";
                   option.textContent = opt.displayValue || opt.exportValue || opt.value || "";
                   if (opt.exportValue === fieldData.fieldValue || opt.value === fieldData.fieldValue) {
-                    option.selected = true;
-                  }
-                  input.appendChild(option);
-                });
-              }
-            } else if (fieldType === "Btn") {
-              input = document.createElement("input");
+                      option.selected = true;
+                    }
+                    input.appendChild(option);
+                  });
+                }
+              } else if (fieldType === "Btn") {
+                input = document.createElement("input");
               if (fieldData.checkbox || fieldData.checkBox) {
-                input.type = "checkbox";
+                  input.type = "checkbox";
                 // Prioriza initialValues para checkboxes também
                 const initialValue = initialValuesRef.current?.[fieldName];
                 const checkboxValue = initialValue !== undefined 
                   ? initialValue 
                   : fieldData.fieldValue;
                 input.checked = checkboxValue === "Yes" || checkboxValue === true || checkboxValue === "on" || checkboxValue === "true";
-              } else {
-                input.type = "button";
+                } else {
+                  input.type = "button";
                 const initialValue = initialValuesRef.current?.[fieldName];
                 const fieldValue = fieldData.fieldValue !== undefined ? String(fieldData.fieldValue) : "";
                 input.value = initialValue !== undefined 
                   ? String(initialValue) 
                   : (fieldValue || fieldData.buttonValue || "");
+                }
+              } else {
+                input = document.createElement("input");
+                input.type = "text";
               }
-            } else {
-              input = document.createElement("input");
-              input.type = "text";
-            }
               
-            // Configura propriedades do campo
-            input.name = fieldName;
-            if (input.type !== "checkbox" && input.type !== "button") {
+              // Configura propriedades do campo
+              input.name = fieldName;
+              if (input.type !== "checkbox" && input.type !== "button") {
               // Prioriza initialValues (dados do banco), depois fieldValue (do JSON), depois defaultValue
               const initialValue = initialValuesRef.current?.[fieldName];
               const fieldValue = fieldData.fieldValue !== undefined ? String(fieldData.fieldValue) : "";
@@ -285,19 +286,28 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
                 : (fieldValue || fieldData.defaultValue || "");
             }
               
-            // Posiciona o campo
-            input.style.position = "absolute";
-            input.style.left = `${left}px`;
-            input.style.top = `${top}px`;
-            input.style.width = `${width}px`;
-            input.style.height = `${height}px`;
-            input.style.pointerEvents = "auto";
-            input.style.zIndex = "10";
-            input.style.border = "1px solid #ccc";
-            input.style.padding = "2px 4px";
+            // Desabilita edição se readOnly for true
+            if (readOnly) {
+              input.disabled = true;
+              // readOnly só existe em input e textarea, não em select
+              if (input.tagName !== "SELECT") {
+                (input as HTMLInputElement | HTMLTextAreaElement).readOnly = true;
+              }
+              }
+              
+              // Posiciona o campo
+              input.style.position = "absolute";
+              input.style.left = `${left}px`;
+              input.style.top = `${top}px`;
+              input.style.width = `${width}px`;
+              input.style.height = `${height}px`;
+            input.style.pointerEvents = readOnly ? "none" : "auto";
+              input.style.zIndex = "10";
+              input.style.border = "1px solid #ccc";
+              input.style.padding = "2px 4px";
             input.style.fontSize = `${fieldData.textSize || 12}px`;
-            input.style.backgroundColor = "rgba(255, 255, 255, 0.95)";
-            input.style.boxSizing = "border-box";
+            input.style.backgroundColor = readOnly ? "rgba(240, 240, 240, 0.95)" : "rgba(255, 255, 255, 0.95)";
+              input.style.boxSizing = "border-box";
             input.style.fontFamily = fieldData.fontFamily || "inherit";
             
             // Centraliza o texto nos campos de texto (não em selects, checkboxes ou botões)
@@ -320,11 +330,11 @@ export default function PdfJsViewer({ pdfUrl, onValues, initialValues }: Props) 
               console.log(`  Input style left: ${input.style.left}, top: ${input.style.top}`);
             }
               
-            annotationLayerDiv.appendChild(input);
-          } catch (fieldErr) {
+              annotationLayerDiv.appendChild(input);
+            } catch (fieldErr) {
             console.warn(`Erro ao renderizar campo ${fieldName}:`, fieldErr);
-          }
-        });
+            }
+          });
       }
 
       setPdfLoaded(true);
