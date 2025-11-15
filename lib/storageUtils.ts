@@ -26,8 +26,7 @@ export async function getFotoPerfilUrl(userId: string | undefined, _fotoUrl?: st
       const errorMessage = error.message?.toLowerCase() || "";
       if (errorMessage.includes("not found") || 
           errorMessage.includes("does not exist") ||
-          errorMessage.includes("not exist") ||
-          error.code === "404") {
+          errorMessage.includes("not exist")) {
         console.log(`Pasta do usuário ${userId} não encontrada no bucket`);
         return null;
       }
