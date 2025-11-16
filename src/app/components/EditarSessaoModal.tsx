@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
-import { Button, Input, Textarea } from "@/components/ui";
+import { Button, Input, Textarea, useToastContext } from "@/components/ui";
 
 interface EditarSessaoModalProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ export default function EditarSessaoModal({
   descricaoInicial,
   onUpdate,
 }: EditarSessaoModalProps) {
+  const { error: showError, warning } = useToastContext();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export default function EditarSessaoModal({
     e.preventDefault();
     
     if (!nome.trim()) {
-      alert("Por favor, preencha o nome da sessão.");
+      warning("Por favor, preencha o nome da sessão.");
       return;
     }
 
@@ -47,7 +48,7 @@ export default function EditarSessaoModal({
     } catch (error) {
       console.error("Erro ao atualizar sessão:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-      alert("Erro ao atualizar sessão: " + errorMessage);
+      showError(`Erro ao atualizar sessão: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

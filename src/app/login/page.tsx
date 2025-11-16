@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabaseClient";
-import { Button, Input, Card, CardHeader, CardTitle, CardContent } from "@/components/ui";
+import { Button, Input, Card, CardHeader, CardTitle, CardContent, useToastContext } from "@/components/ui";
 import "../globals.css";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { error: showError, success } = useToastContext();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -27,8 +28,13 @@ export default function LoginPage() {
       password,
     });
 
-    if (error) setMessage(`Erro: ${error.message}`);
-    else router.push("/dashboard");
+    if (error) {
+      showError(`Erro ao fazer login: ${error.message}`);
+      setMessage(`Erro: ${error.message}`);
+    } else {
+      success("Login realizado com sucesso!");
+      router.push("/dashboard");
+    }
   }
 
   return (

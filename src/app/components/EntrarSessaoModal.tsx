@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Modal from "./Modal";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, useToastContext } from "@/components/ui";
 
 interface EntrarSessaoModalProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ export default function EntrarSessaoModal({
   onClose,
   onEntrarSessao,
 }: EntrarSessaoModalProps) {
+  const { error: showError, warning } = useToastContext();
   const [sessaoId, setSessaoId] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +23,7 @@ export default function EntrarSessaoModal({
     e.preventDefault();
     
     if (!sessaoId.trim()) {
-      alert("Por favor, informe o ID ou código da sessão.");
+      warning("Por favor, informe o ID ou código da sessão.");
       return;
     }
 
@@ -34,7 +35,8 @@ export default function EntrarSessaoModal({
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Erro ao entrar na sessão. Veja o console para mais detalhes.");
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      showError(`Erro ao entrar na sessão: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

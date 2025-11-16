@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { supabase } from "../../../lib/supabaseClient";
-import { Button, Input, Card, CardHeader, CardTitle, CardContent } from "@/components/ui";
+import { Button, Input, Card, CardHeader, CardTitle, CardContent, useToastContext } from "@/components/ui";
 import "../globals.css";
 
 export default function RegisterPage() {
+  const { error: showError, success, warning } = useToastContext();
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
   const [email, setEmail] = useState("");
@@ -15,16 +16,19 @@ export default function RegisterPage() {
 
   async function handleRegister() {
     if (!nome.trim()) {
+      warning("Por favor, preencha o nome");
       setMessage("Por favor, preencha o nome ❌");
       return;
     }
 
     if (password !== confirmPassword) {
+      warning("As senhas não conferem");
       setMessage("As senhas não conferem ❌");
       return;
     }
 
     if (password.length < 6) {
+      warning("A senha deve ter pelo menos 6 caracteres");
       setMessage("A senha deve ter pelo menos 6 caracteres ❌");
       return;
     }
@@ -40,8 +44,13 @@ export default function RegisterPage() {
       },
     });
 
-    if (error) setMessage(`Erro: ${error.message}`);
-    else setMessage("Cadastro realizado com sucesso ✅ Verifique seu e-mail.");
+    if (error) {
+      showError(`Erro ao cadastrar: ${error.message}`);
+      setMessage(`Erro: ${error.message}`);
+    } else {
+      success("Cadastro realizado com sucesso! Verifique seu e-mail.");
+      setMessage("Cadastro realizado com sucesso ✅ Verifique seu e-mail.");
+    }
   }
 
   return (

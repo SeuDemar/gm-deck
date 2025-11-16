@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Modal from "./Modal";
-import { Button, Input, Textarea } from "@/components/ui";
+import { Button, Input, Textarea, useToastContext } from "@/components/ui";
 
 interface CriarSessaoModalProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ export default function CriarSessaoModal({
   onClose,
   onCreateSessao,
 }: CriarSessaoModalProps) {
+  const { error: showError, warning } = useToastContext();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ export default function CriarSessaoModal({
     e.preventDefault();
     
     if (!nome.trim()) {
-      alert("Por favor, preencha o nome da sessão.");
+      warning("Por favor, preencha o nome da sessão.");
       return;
     }
 
@@ -36,7 +37,8 @@ export default function CriarSessaoModal({
       onClose();
     } catch (error) {
       console.error(error);
-      alert("Erro ao criar sessão. Veja o console para mais detalhes.");
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      showError(`Erro ao criar sessão: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

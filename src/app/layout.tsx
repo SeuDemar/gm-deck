@@ -1,5 +1,8 @@
 import "../styles/tokens.css";
 import "./globals.css";
+// Importa o CSS obrigatório do PDF.js
+import "pdfjs-dist/web/pdf_viewer.css";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export default function RootLayout({
   children,
@@ -8,7 +11,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

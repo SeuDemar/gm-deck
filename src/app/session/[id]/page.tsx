@@ -26,6 +26,7 @@ import {
   Loading,
   EmptyState,
   Avatar,
+  useToastContext,
 } from "@/components/ui";
 import "../../globals.css";
 
@@ -98,6 +99,7 @@ export default function SessionPage() {
   const router = useRouter();
   const params = useParams();
   const sessaoId = params?.id as string;
+  const { error: showError, success, info } = useToastContext();
 
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null
@@ -189,15 +191,15 @@ export default function SessionPage() {
       .writeText(sessaoId)
       .then(() => {
         setCopied(true);
+        success("ID da sessão copiado!");
         setTimeout(() => {
           setCopied(false);
         }, 2000);
       })
       .catch((error) => {
         console.error("Erro ao copiar ID:", error);
-        alert(
-          "Erro ao copiar ID da sessão. Por favor, copie manualmente: " +
-            sessaoId
+        showError(
+          "Erro ao copiar ID da sessão. Por favor, copie manualmente."
         );
       });
   }
@@ -216,13 +218,13 @@ export default function SessionPage() {
 
     try {
       await excluirSessao(sessaoId);
-      alert("Sessão excluída com sucesso!");
+      success("Sessão excluída com sucesso!");
       router.push("/dashboard");
     } catch (error: unknown) {
       console.error("Erro ao excluir sessão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      alert("Erro ao excluir sessão: " + errorMessage);
+      showError(`Erro ao excluir sessão: ${errorMessage}`);
     }
   }
 
@@ -240,13 +242,13 @@ export default function SessionPage() {
 
     try {
       await cortarVinculosSessao(sessaoId);
-      alert("Você saiu da sessão permanentemente!");
+      success("Você saiu da sessão permanentemente!");
       router.push("/dashboard");
     } catch (error: unknown) {
       console.error("Erro ao cortar vínculos:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      alert("Erro ao cortar vínculos: " + errorMessage);
+      showError(`Erro ao cortar vínculos: ${errorMessage}`);
     }
   }
 
@@ -1936,7 +1938,7 @@ export default function SessionPage() {
                                         ficha.id
                                       );
                                       setFichaSelecionadaId(ficha.id);
-                                      alert("Ficha selecionada com sucesso!");
+                                      success("Ficha selecionada com sucesso!");
                                       // Recarrega a sessão para atualizar ficha_ids
                                       if (sessaoId) {
                                         const sessaoData =
@@ -1954,9 +1956,8 @@ export default function SessionPage() {
                                         error instanceof Error
                                           ? error.message
                                           : "Erro desconhecido";
-                                      alert(
-                                        "Erro ao selecionar ficha: " +
-                                          errorMessage
+                                      showError(
+                                        `Erro ao selecionar ficha: ${errorMessage}`
                                       );
                                     }
                                   }}
@@ -1994,7 +1995,7 @@ export default function SessionPage() {
             );
             if (sessaoAtualizada) {
               setSessao(sessaoAtualizada);
-              alert("Sessão atualizada com sucesso!");
+              success("Sessão atualizada com sucesso!");
             }
           } catch (error) {
             console.error("Erro ao atualizar sessão:", error);

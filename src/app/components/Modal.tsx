@@ -15,14 +15,17 @@ const Modal: FC<ModalProps> = ({ isOpen, onClose, children }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto py-4"
       onClick={onClose}
     >
       <div
-        className="relative rounded-2xl shadow-lg w-[95vw] h-[95vh] sm:w-[90vw] sm:h-[90vh] md:w-[85vw] md:h-[85vh] lg:w-[80vw] lg:h-[80vh]"
+        className="relative rounded-2xl shadow-lg w-[98vw] sm:w-[95vw] md:w-[95vw] lg:w-[95vw] flex flex-col"
         style={{
           backgroundColor: "var(--color-text-primary)",
           color: "var(--color-background-dark)",
+          marginTop: "var(--spacing-4)",
+          marginBottom: "var(--spacing-4)",
+          border: "none",
         }}
         onClick={(e) => e.stopPropagation()}
       >

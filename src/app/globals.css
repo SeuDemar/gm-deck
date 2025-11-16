@@ -87,6 +87,21 @@ p {
   pointer-events: auto !important;
 }
 
+/* Estilos para PDFViewer do pdfjs-dist */
+.pdfViewer {
+  padding: 0 !important;
+}
+
+.pdfViewer .page {
+  margin: 0 auto;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pdfViewer .page canvas {
+  display: block;
+}
+
 /* Classes utilitárias para cores do tema */
 .text-primary {
   color: var(--color-text-primary);
@@ -207,4 +222,16 @@ p {
 .ficha-card.border-dashed:hover {
   border-color: var(--color-brand-light);
   background-color: rgba(161, 57, 77, 0.05); /* brand-light com opacidade */
+}
+
+/* Animação para Toast */
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }

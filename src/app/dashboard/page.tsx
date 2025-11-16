@@ -20,6 +20,7 @@ import {
   CardContent,
   Badge,
   Loading,
+  useToastContext,
 } from "@/components/ui";
 
 type FichaListItem = {
@@ -31,6 +32,7 @@ type FichaListItem = {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { error: showError, success } = useToastContext();
   const { getUserFichas } = useSupabasePdf();
   const { criarSessao, entrarSessao, getSessoesMestre, getSessoesJogador } =
     useSupabaseSessao();
@@ -226,7 +228,9 @@ export default function DashboardPage() {
         },
         async (payload) => {
           // Verifica se a ficha pertence ao usuário atual
-          const fichaData = (payload.new || payload.old) as { usuarioId?: string } | null;
+          const fichaData = (payload.new || payload.old) as {
+            usuarioId?: string;
+          } | null;
           if (fichaData && fichaData.usuarioId === user.id) {
             // Recarrega as fichas quando há mudanças nas fichas do usuário
             try {
@@ -282,12 +286,13 @@ export default function DashboardPage() {
       const sessao = await criarSessao(nome, descricao);
       // Recarrega as sessões após criar
       await loadSessoes();
+      success("Sessão criada com sucesso!");
       router.push(`/session/${sessao.id}`);
     } catch (error: unknown) {
       console.error("Erro ao criar sessão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      alert("Erro ao criar sessão: " + errorMessage);
+      showError(`Erro ao criar sessão: ${errorMessage}`);
     }
   }
 
@@ -296,12 +301,13 @@ export default function DashboardPage() {
       await entrarSessao(sessaoId);
       // Recarrega as sessões após entrar
       await loadSessoes();
+      success("Você entrou na sessão com sucesso!");
       router.push(`/session/${sessaoId}`);
     } catch (error: unknown) {
       console.error("Erro ao entrar na sessão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
-      alert("Erro ao entrar na sessão: " + errorMessage);
+      showError(`Erro ao entrar na sessão: ${errorMessage}`);
     }
   }
 
@@ -393,7 +399,8 @@ export default function DashboardPage() {
                           </CardHeader>
                           <CardContent className="flex flex-col items-center justify-center flex-1 w-full">
                             <p className="text-sm text-gray-600 mb-4 text-center">
-                              Clique no botão abaixo para criar sua primeira ficha.
+                              Clique no botão abaixo para criar sua primeira
+                              ficha.
                             </p>
                             <button
                               className="flex flex-col items-center justify-center min-h-[120px] w-full border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer rounded-lg p-4"
@@ -466,7 +473,8 @@ export default function DashboardPage() {
                           </CardHeader>
                           <CardContent className="flex flex-col items-center justify-center flex-1 w-full">
                             <p className="text-sm text-gray-600 mb-4 text-center">
-                              Clique no botão abaixo para criar sua primeira sessão.
+                              Clique no botão abaixo para criar sua primeira
+                              sessão.
                             </p>
                             <button
                               className="flex flex-col items-center justify-center min-h-[120px] w-full border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer rounded-lg p-4"

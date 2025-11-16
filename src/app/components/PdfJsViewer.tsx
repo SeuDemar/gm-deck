@@ -1,421 +1,649 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import "pdfjs-dist/web/pdf_viewer.css";
 
 interface Props {
   pdfUrl: string;
   onValues?: (values: Record<string, string>) => void;
   initialValues?: Record<string, string>; // Valores iniciais para popular os campos
   readOnly?: boolean; // Se true, desabilita edição dos campos
+  isVisible?: boolean; // Se false, não inicializa o PDF (útil para modais)
 }
 
-interface FieldPosition {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
+export interface PdfJsViewerRef {
+  collectValues: () => Record<string, string>;
 }
 
-interface FieldOption {
-  exportValue?: string;
-  displayValue?: string;
-  value?: string;
-}
+const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
+  (
+    {
+      pdfUrl,
+      onValues,
+      initialValues,
+      readOnly = false,
+      isVisible = true, // Por padrão assume que está visível
+    },
+    ref
+  ) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfViewerRef = useRef<{ setDocument: (pdf: any) => void } | null>(
+      null
+    );
+    const [pdfLoaded, setPdfLoaded] = useState(false);
 
-interface FieldData {
-  name: string;
-  type: string;
-  fieldType: string;
-  fieldValue?: string | boolean;
-  defaultValue?: string;
-  textSize?: number;
-  multiLine?: boolean;
-  page?: number;
-  pageNum?: number;
-  position?: FieldPosition;
-  options?: FieldOption[];
-  checkbox?: boolean;
-  checkBox?: boolean;
-  adjustments?: {
-    left?: number;
-    top?: number;
-    width?: number;
-    height?: number;
-  };
-  buttonValue?: string;
-  fontFamily?: string;
-}
+    // Usa ref para onValues para evitar re-renders desnecessários
+    const onValuesRef = useRef(onValues);
+    useEffect(() => {
+      onValuesRef.current = onValues;
+    }, [onValues]);
 
-export default function PdfJsViewer({ pdfUrl, onValues, initialValues, readOnly = false }: Props) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [pdfLoaded, setPdfLoaded] = useState(false);
+    // Usa ref para initialValues para poder acessar dentro do useEffect sem recriar a função
+    const initialValuesRef = useRef(initialValues);
+    useEffect(() => {
+      initialValuesRef.current = initialValues;
+    }, [initialValues]);
 
-  // Usa ref para onValues para evitar re-renders desnecessários
-  const onValuesRef = useRef(onValues);
-  useEffect(() => {
-    onValuesRef.current = onValues;
-  }, [onValues]);
+    const collectFieldValues = useCallback(() => {
+      const container = containerRef.current;
+      if (!container) {
+        console.warn("collectFieldValues: Container não encontrado");
+        return {};
+      }
 
-  // Usa ref para initialValues para poder acessar dentro do useEffect sem recriar a função
-  const initialValuesRef = useRef(initialValues);
-  useEffect(() => {
-    initialValuesRef.current = initialValues;
-  }, [initialValues]);
+      const values: Record<string, string> = {};
 
-  const collectFieldValues = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return {};
+      // Busca campos em qualquer lugar do container
+      // O PDF.js cria campos dentro do viewer, então precisamos buscar em todo o container
+      const inputs = container.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >("input, textarea, select");
 
-    const values: Record<string, string> = {};
+      console.log(`collectFieldValues: Encontrados ${inputs.length} campos`);
 
-    // Busca campos em qualquer lugar do container (PDFPageView renderiza em diferentes estruturas)
-    const inputs = container.querySelectorAll<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >(
-      "input[name], textarea[name], select[name]"
+      inputs.forEach((el) => {
+        const name = el.getAttribute("name");
+        if (!name) {
+          // Log campos sem name para debug
+          console.warn("Campo sem atributo name:", el);
+          return;
+        }
+
+        let value: string;
+        if (
+          el instanceof HTMLInputElement &&
+          (el.type === "checkbox" || el.type === "radio")
+        ) {
+          value = el.checked ? el.value || "on" : "";
+        } else {
+          value = el.value ?? "";
+        }
+
+        values[name] = value;
+        console.log(`Campo coletado: ${name} = "${value}"`);
+      });
+
+      console.log("Valores coletados:", values);
+
+      // Usa ref em vez de onValues diretamente
+      onValuesRef.current?.(values);
+      return values;
+    }, []);
+
+    // Expõe a função collectFieldValues via ref
+    React.useImperativeHandle(
+      ref,
+      () => ({
+        collectValues: () => {
+          return collectFieldValues();
+        },
+      }),
+      [collectFieldValues]
     );
 
-    inputs.forEach((el) => {
-      const name = el.getAttribute("name");
-      if (!name) return;
+    // Função auxiliar para verificar se o container tem dimensões válidas
+    const hasValidDimensions = useCallback(
+      (element: HTMLElement | null): boolean => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        // Verifica se tem dimensões válidas E se está visível (não está com display: none)
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden"
+        );
+      },
+      []
+    );
 
-      if (
-        el instanceof HTMLInputElement &&
-        (el.type === "checkbox" || el.type === "radio")
-      ) {
-        values[name] = el.checked ? el.value || "on" : "";
-      } else {
-        values[name] = el.value ?? "";
+    useEffect(() => {
+      // Se não estiver visível, não inicializa e limpa o container
+      if (!isVisible) {
+        if (containerRef.current) {
+          containerRef.current.innerHTML = "";
+        }
+        setPdfLoaded(false);
+        return;
       }
-    });
 
-    // Usa ref em vez de onValues diretamente
-    onValuesRef.current?.(values);
-    return values;
-  }, []); // Removido onValues das dependências
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function init() {
-      // Importa pdf.js de forma dinâmica
-      const pdfjsLib = await import("pdfjs-dist");
-
-      // Configura worker ANTES de qualquer operação com PDF
-      // Usa worker local da pasta public com URL absoluta
-      if (typeof window !== "undefined") {
-        // Constrói URL absoluta para o worker local
-        // Isso garante que funcione tanto em dev quanto em produção
-        const workerUrl = new URL("/pdf-js/pdf.worker.mjs", window.location.origin).href;
-        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+      // Verifica se o container existe antes de inicializar
+      if (!containerRef.current) {
+        return;
       }
+
+      let destroyed = false;
+      let retryTimeoutId: NodeJS.Timeout | null = null;
+      // Captura o container no início para usar no cleanup
+      const container = containerRef.current;
+
+      const initializePdf = async () => {
+        try {
+          // Verifica novamente se o container ainda existe e não foi destruído
+          if (!containerRef.current || destroyed) return;
+
+          // Verifica se o container tem dimensões válidas
+          // Se não tiver, não tenta inicializar (evita o erro)
+          if (!hasValidDimensions(containerRef.current)) {
+            console.warn(
+              "Container sem dimensões válidas, aguardando modal ficar visível..."
+            );
+            return;
+          }
+
+          // Importa pdf.js de forma dinâmica
+          const pdfjsLib = await import("pdfjs-dist");
+
+          // Configura worker ANTES de qualquer operação com PDF
+          if (typeof window !== "undefined") {
+            const workerUrl = new URL(
+              "/pdf-js/pdf.worker.mjs",
+              window.location.origin
+            ).href;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+          }
+
+          if (destroyed || !containerRef.current) return;
+
+          // Limpa o container sem remover classes essenciais
+          const currentContainer = containerRef.current;
+          currentContainer.innerHTML = "";
+
+          // Estilos obrigatórios do container externo
+          // O PDF.js REQUER position: absolute no container (verificação interna do PDFViewer)
+          // Mas também precisa de dimensões válidas, então garantimos ambos
+          currentContainer.style.position = "absolute";
+          currentContainer.style.top = "0";
+          currentContainer.style.left = "0";
+          currentContainer.style.width = "100%";
+          currentContainer.style.height = "100%";
+          currentContainer.style.minHeight = "400px"; // GARANTE QUE NUNCA SERÁ ZERO
+          currentContainer.style.overflow = "auto";
+          currentContainer.style.backgroundColor = "#fff";
+
+          // FORÇA um reflow para garantir que os estilos foram aplicados
+          // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+          currentContainer.offsetHeight;
+
+          // Verifica novamente as dimensões DEPOIS de configurar os estilos
+          // Se ainda não tiver dimensões válidas, força uma altura fixa
+          const rect = currentContainer.getBoundingClientRect();
+          const computedStyle = window.getComputedStyle(currentContainer);
+
+          // Se o container não tem altura válida, força uma altura fixa
+          // Isso é necessário quando o container está dentro de uma modal que ainda está animando
+          if (
+            rect.height === 0 ||
+            computedStyle.height === "0px" ||
+            computedStyle.height === "auto"
+          ) {
+            // Tenta pegar a altura do container pai primeiro
+            const parentElement = currentContainer.parentElement;
+            let targetHeight = "600px"; // altura padrão
+
+            if (parentElement) {
+              const parentRect = parentElement.getBoundingClientRect();
+              if (parentRect.height > 0) {
+                targetHeight = `${parentRect.height}px`;
+              }
+            }
+
+            currentContainer.style.height = targetHeight;
+            console.log(`Forçando altura do container para: ${targetHeight}`);
+
+            // Força outro reflow
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            currentContainer.offsetHeight;
+          }
+
+          // Garante que a largura está correta
+          if (rect.width === 0 || computedStyle.width === "0px") {
+            currentContainer.style.width = "100%";
+            // Força outro reflow
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            currentContainer.offsetHeight;
+          }
+
+          // Verificação final antes de criar o PDFViewer
+          if (!hasValidDimensions(currentContainer)) {
+            console.error(
+              "Container ainda sem dimensões válidas após configurar estilos. Abortando inicialização."
+            );
+            return;
+          }
+
+          // Cria o elemento viewer interno (estrutura obrigatória do PDF.js)
+          const viewerElement = document.createElement("div");
+          viewerElement.id = "viewer";
+          viewerElement.className = "pdfViewer"; // OBRIGATÓRIO - o PDF.js precisa desta classe
+          currentContainer.appendChild(viewerElement);
+
+          // Tenta importar o viewer do pdfjs-dist
+          const pdfjsViewerModule = await import(
+            "pdfjs-dist/web/pdf_viewer"
+          ).catch(() => null);
+
+          if (!pdfjsViewerModule || destroyed || !containerRef.current) return;
+
+          // Verificação final antes de criar o PDFViewer
+          if (!hasValidDimensions(currentContainer)) {
+            console.error(
+              "Container perdeu dimensões válidas antes de criar PDFViewer. Abortando."
+            );
+            return;
+          }
+
+          // Aguarda um frame adicional para garantir que o DOM está totalmente renderizado
+          // Isso é especialmente importante em modais que podem estar animando
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                resolve(undefined);
+              });
+            });
+          });
+
+          // Verificação final após aguardar os frames
+          if (
+            destroyed ||
+            !containerRef.current ||
+            !hasValidDimensions(currentContainer)
+          ) {
+            console.error(
+              "Container perdeu dimensões válidas após aguardar frames. Abortando."
+            );
+            return;
+          }
+
+          // LOGS DE DEBUG: Verifica o estado exato do container antes de criar o PDFViewer
+          const finalRect = currentContainer.getBoundingClientRect();
+          const finalStyle = window.getComputedStyle(currentContainer);
+          console.log(
+            "=== DEBUG: Estado do container antes de criar PDFViewer ==="
+          );
+          console.log("getBoundingClientRect:", {
+            width: finalRect.width,
+            height: finalRect.height,
+            top: finalRect.top,
+            left: finalRect.left,
+          });
+          console.log("Computed style:", {
+            position: finalStyle.position,
+            width: finalStyle.width,
+            height: finalStyle.height,
+            display: finalStyle.display,
+            visibility: finalStyle.visibility,
+          });
+          console.log("Inline style:", {
+            position: currentContainer.style.position,
+            width: currentContainer.style.width,
+            height: currentContainer.style.height,
+          });
+
+          // Garante que o container tem altura fixa em pixels (não apenas minHeight)
+          // O PDF.js precisa de dimensões concretas, não apenas minHeight
+          if (
+            finalRect.height === 0 ||
+            finalStyle.height === "0px" ||
+            finalStyle.height === "auto"
+          ) {
+            const fixedHeight = Math.max(600, finalRect.height || 600);
+            currentContainer.style.height = `${fixedHeight}px`;
+            console.log(`Forçando altura fixa para: ${fixedHeight}px`);
+            // Força reflow
+            // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+            currentContainer.offsetHeight;
+          }
+
+          // Verificação final após forçar altura
+          const finalCheckRect = currentContainer.getBoundingClientRect();
+          if (finalCheckRect.width === 0 || finalCheckRect.height === 0) {
+            console.error(
+              `Container ainda sem dimensões válidas após forçar altura. Width: ${finalCheckRect.width}, Height: ${finalCheckRect.height}`
+            );
+            return;
+          }
+
+          // Cria event bus e link service
+          const eventBus = new pdfjsViewerModule.EventBus();
+          const pdfLinkService = new pdfjsViewerModule.PDFLinkService({
+            eventBus,
+          });
+
+          console.log("Criando PDFViewer com container:", {
+            width: finalCheckRect.width,
+            height: finalCheckRect.height,
+            position: window.getComputedStyle(currentContainer).position,
+          });
+
+          // Cria o PDFViewer usando o container externo e o viewer interno
+          const pdfViewer = new pdfjsViewerModule.PDFViewer({
+            container: currentContainer, // Container externo
+            viewer: viewerElement, // Elemento viewer interno (obrigatório)
+            eventBus: eventBus,
+            linkService: pdfLinkService,
+            enableScripting: true,
+            renderInteractiveForms: true, // Habilita formulários nativos do PDF
+          });
+
+          pdfLinkService.setViewer(pdfViewer);
+          pdfViewerRef.current = pdfViewer;
+
+          // Carrega o PDF
+          const loadingTask = pdfjsLib.getDocument(pdfUrl);
+          const pdf = await loadingTask.promise;
+
+          if (destroyed || !containerRef.current) return;
+
+          pdfViewer.setDocument(pdf);
+          pdfLinkService.setDocument(pdf);
+
+          // Aguarda o PDF ser renderizado
+          eventBus.on("pagesinit", () => {
+            if (destroyed || !containerRef.current) return;
+
+            // Aguarda todas as páginas serem renderizadas
+            // O PDF.js pode usar lazy loading, então precisamos forçar renderização de todas as páginas
+            const waitForAllPages = async () => {
+              if (destroyed || !containerRef.current) return;
+
+              const container = containerRef.current;
+
+              // Aguarda um pouco para garantir que a primeira página começou a renderizar
+              await new Promise((resolve) => setTimeout(resolve, 500));
+
+              // Faz scroll para garantir que todas as páginas sejam renderizadas
+              if (container) {
+                // Scroll até o final para forçar renderização de todas as páginas
+                const scrollHeight = container.scrollHeight;
+
+                // Scroll progressivo para garantir que todas as páginas sejam renderizadas
+                container.scrollTop = scrollHeight;
+
+                // Aguarda um pouco após o scroll para dar tempo de renderizar
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Volta ao topo
+                container.scrollTop = 0;
+
+                // Aguarda mais um pouco para garantir que tudo foi renderizado
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              }
+
+              if (destroyed || !containerRef.current) return;
+
+              // Aplica valores iniciais se fornecidos
+              if (
+                initialValuesRef.current &&
+                Object.keys(initialValuesRef.current).length > 0
+              ) {
+                const container = containerRef.current;
+                if (!container) return;
+
+                Object.entries(initialValuesRef.current || {}).forEach(
+                  ([fieldName, value]) => {
+                    const input = container.querySelector<
+                      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+                    >(`[name="${fieldName}"]`);
+
+                    if (input) {
+                      if (input.type === "checkbox") {
+                        const strValue = String(value || "");
+                        (input as HTMLInputElement).checked =
+                          strValue === "Yes" ||
+                          strValue === "on" ||
+                          strValue === "true";
+                      } else if (input.type !== "button") {
+                        input.value = String(value || "");
+                      }
+                    }
+                  }
+                );
+
+                collectFieldValues();
+              }
+
+              // Aplica readOnly se necessário
+              if (readOnly && containerRef.current) {
+                const inputs = containerRef.current.querySelectorAll<
+                  HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+                >("input, textarea, select");
+                inputs.forEach((input) => {
+                  input.disabled = true;
+                  if (input.tagName !== "SELECT") {
+                    (input as HTMLInputElement | HTMLTextAreaElement).readOnly =
+                      true;
+                  }
+                });
+              }
+
+              setPdfLoaded(true);
+              collectFieldValues();
+            };
+
+            waitForAllPages();
+          });
+        } catch (err) {
+          console.error("Erro ao inicializar PDF.js:", err);
+        }
+      };
+
+      // Aguarda a modal ficar 100% visível antes de inicializar
+      // Isso garante que o layout foi calculado e o container tem dimensões válidas
+      const timeoutId = setTimeout(() => {
+        // Verifica se tem dimensões válidas antes de inicializar
+        if (hasValidDimensions(containerRef.current)) {
+          initializePdf();
+        } else {
+          // Se ainda não tiver dimensões, tenta novamente após mais um delay
+          // Isso cobre casos onde a animação da modal demora mais
+          retryTimeoutId = setTimeout(() => {
+            if (
+              !destroyed &&
+              containerRef.current &&
+              hasValidDimensions(containerRef.current)
+            ) {
+              initializePdf();
+            } else {
+              console.error(
+                "Não foi possível inicializar o PDF: container ainda sem dimensões válidas"
+              );
+            }
+          }, 100);
+        }
+      }, 50); // Aguarda 50ms para garantir que a modal terminou de abrir
+
+      return () => {
+        destroyed = true;
+        clearTimeout(timeoutId);
+        if (retryTimeoutId) {
+          clearTimeout(retryTimeoutId);
+        }
+        // Usa a referência capturada no início do effect
+        if (container) {
+          container.innerHTML = "";
+        }
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pdfUrl, readOnly, isVisible, hasValidDimensions]);
+
+    // Observa mudanças nos campos do formulário
+    useEffect(() => {
+      if (!pdfLoaded) return;
 
       const container = containerRef.current;
       if (!container) return;
 
-      container.innerHTML = "";
-
-      // Carrega o mapeamento de coordenadas PRIMEIRO (em pixels)
-      let coordinatesMap: Record<string, FieldData> = {};
-      try {
-        const response = await fetch("/data/ficha-coordinates-pixels.json");
-        if (response.ok) {
-          const data = await response.json();
-          coordinatesMap = data.fields || {};
-        }
-      } catch (err) {
-        console.warn("Não foi possível carregar mapeamento de coordenadas em pixels, tentando formato antigo:", err);
-        // Fallback para formato antigo (pontos)
-        try {
-          const responseOld = await fetch("/data/ficha-coordinates.json");
-          if (responseOld.ok) {
-            const dataOld = await responseOld.json();
-            coordinatesMap = dataOld.fields || {};
+      function handleFieldChange(event?: Event) {
+        // Log quando um campo é alterado (apenas para debug)
+        if (event?.target) {
+          const target = event.target as
+            | HTMLInputElement
+            | HTMLTextAreaElement
+            | HTMLSelectElement;
+          const name = target.getAttribute("name");
+          if (name) {
+            console.log(`Campo alterado: ${name} = "${target.value}"`);
           }
-        } catch (errOld) {
-          console.warn("Não foi possível carregar mapeamento de coordenadas:", errOld);
         }
+        collectFieldValues();
       }
 
-      // Carrega o PDF
-      const loadingTask = pdfjsLib.getDocument(pdfUrl);
-      const pdf = await loadingTask.promise;
+      // Função para adicionar listeners a todos os campos
+      const addListenersToAllFields = () => {
+        const inputs = container.querySelectorAll("input, textarea, select");
+        console.log(`Adicionando listeners para ${inputs.length} campos`);
 
-      if (!mounted) return;
+        inputs.forEach((input) => {
+          // Remove listeners antigos antes de adicionar novos (evita duplicação)
+          input.removeEventListener("input", handleFieldChange);
+          input.removeEventListener("change", handleFieldChange);
+          input.removeEventListener("blur", handleFieldChange);
 
-      // Para cada página, renderiza canvas + campos de formulário
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.2 });
+          // Adiciona novos listeners
+          input.addEventListener("input", handleFieldChange);
+          input.addEventListener("change", handleFieldChange);
+          // Também adiciona listener para blur (quando o campo perde o foco)
+          input.addEventListener("blur", handleFieldChange);
+        });
+      };
 
-        // Wrapper para a página
-        const wrapper = document.createElement("div");
-        wrapper.style.position = "relative";
-        wrapper.style.width = `${viewport.width}px`;
-        wrapper.style.height = `${viewport.height}px`;
-        wrapper.style.margin = "0 auto 20px";
-        container.appendChild(wrapper);
+      // Adiciona listeners iniciais
+      addListenersToAllFields();
 
-        // Canvas para renderizar o PDF
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        canvas.style.pointerEvents = "none";
-        wrapper.appendChild(canvas);
+      // Usa MutationObserver para detectar quando novos campos são adicionados ao DOM
+      // Isso é importante porque o PDF.js pode adicionar campos de outras páginas dinamicamente
+      const observer = new MutationObserver((mutations) => {
+        let hasNewFields = false;
 
-        const ctx = canvas.getContext("2d")!;
-        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-
-        // Container para campos de formulário
-        const annotationLayerDiv = document.createElement("div");
-        annotationLayerDiv.className = "annotationLayer";
-        annotationLayerDiv.style.position = "absolute";
-        annotationLayerDiv.style.left = "0";
-        annotationLayerDiv.style.top = "0";
-        annotationLayerDiv.style.width = `${viewport.width}px`;
-        annotationLayerDiv.style.height = `${viewport.height}px`;
-        annotationLayerDiv.style.pointerEvents = "auto";
-        wrapper.appendChild(annotationLayerDiv);
-
-
-        // Renderiza campos de formulário DIRETAMENTE DO JSON
-        Object.entries(coordinatesMap).forEach(([fieldName, fieldData]: [string, FieldData]) => {
-          try {
-            // Verifica se o campo pertence a esta página
-            let fieldPage = fieldData.page || fieldData.pageNum;
-            
-            // Verifica se tem coordenadas em pixels
-            if (!fieldData.position || typeof fieldData.position !== 'object') {
-              console.warn(`Campo ${fieldName} não tem position definido`);
-              return;
-        }
-
-            // Usa position (pixels) diretamente
-            let left = fieldData.position.left || 0;
-            let top = fieldData.position.top || 0;
-            let width = fieldData.position.width || 0;
-            let height = fieldData.position.height || 0;
-
-            // Se não tem página definida, detecta automaticamente baseado na posição Y
-            if (!fieldPage) {
-              // Altura da página em pixels (calculada a partir do viewport)
-              const pageHeightPx = viewport.height;
-              // Se o campo está além da altura da primeira página, está na segunda
-              if (top >= pageHeightPx) {
-                fieldPage = 2;
-              } else {
-                fieldPage = 1;
-              }
-            }
-            
-            // Se não é esta página, pula
-            if (fieldPage !== pageNum) return;
-              
-              // Aplica ajustes finos do mapeamento se disponíveis
-            if (fieldData.adjustments) {
-              left += fieldData.adjustments.left || 0;
-              top += fieldData.adjustments.top || 0;
-              width += (fieldData.adjustments.width || 0);
-              height += (fieldData.adjustments.height || 0);
-              }
-              
-            // Se não está na primeira página, ajusta o top
-            if (fieldPage > 1) {
-              // Para páginas seguintes, precisa subtrair a altura acumulada das páginas anteriores
-              const accumulatedHeight = (fieldPage - 1) * viewport.height;
-              top -= accumulatedHeight;
-              }
-              
-            // Cria o elemento HTML baseado no tipo de campo DO JSON
-              let input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-            const fieldType = fieldData.type || "Tx"; // Padrão: textfield
-              
-              if (fieldType === "Tx") {
-              if (fieldData.multiLine) {
-                  input = document.createElement("textarea");
-                  (input as HTMLTextAreaElement).rows = Math.max(1, Math.floor(height / 16));
-                } else {
-                  input = document.createElement("input");
-                  input.type = "text";
-                }
-              } else if (fieldType === "Ch") {
-                input = document.createElement("select");
-              const options = fieldData.options;
-                if (options && Array.isArray(options)) {
-                options.forEach((opt: FieldOption) => {
-                    const option = document.createElement("option");
-                  option.value = opt.exportValue || opt.displayValue || opt.value || "";
-                  option.textContent = opt.displayValue || opt.exportValue || opt.value || "";
-                  if (opt.exportValue === fieldData.fieldValue || opt.value === fieldData.fieldValue) {
-                      option.selected = true;
-                    }
-                    input.appendChild(option);
-                  });
-                }
-              } else if (fieldType === "Btn") {
-                input = document.createElement("input");
-              if (fieldData.checkbox || fieldData.checkBox) {
-                  input.type = "checkbox";
-                // Prioriza initialValues para checkboxes também
-                const initialValue = initialValuesRef.current?.[fieldName];
-                const checkboxValue = initialValue !== undefined 
-                  ? initialValue 
-                  : fieldData.fieldValue;
-                input.checked = checkboxValue === "Yes" || checkboxValue === true || checkboxValue === "on" || checkboxValue === "true";
-                } else {
-                  input.type = "button";
-                const initialValue = initialValuesRef.current?.[fieldName];
-                const fieldValue = fieldData.fieldValue !== undefined ? String(fieldData.fieldValue) : "";
-                input.value = initialValue !== undefined 
-                  ? String(initialValue) 
-                  : (fieldValue || fieldData.buttonValue || "");
-                }
-              } else {
-                input = document.createElement("input");
-                input.type = "text";
-              }
-              
-              // Configura propriedades do campo
-              input.name = fieldName;
-              if (input.type !== "checkbox" && input.type !== "button") {
-              // Prioriza initialValues (dados do banco), depois fieldValue (do JSON), depois defaultValue
-              const initialValue = initialValuesRef.current?.[fieldName];
-              const fieldValue = fieldData.fieldValue !== undefined ? String(fieldData.fieldValue) : "";
-              input.value = initialValue !== undefined 
-                ? String(initialValue) 
-                : (fieldValue || fieldData.defaultValue || "");
-            }
-              
-            // Desabilita edição se readOnly for true
-            if (readOnly) {
-              input.disabled = true;
-              // readOnly só existe em input e textarea, não em select
-              if (input.tagName !== "SELECT") {
-                (input as HTMLInputElement | HTMLTextAreaElement).readOnly = true;
-              }
-              }
-              
-              // Posiciona o campo
-              input.style.position = "absolute";
-              input.style.left = `${left}px`;
-              input.style.top = `${top}px`;
-              input.style.width = `${width}px`;
-              input.style.height = `${height}px`;
-            input.style.pointerEvents = readOnly ? "none" : "auto";
-              input.style.zIndex = "10";
-              input.style.border = "1px solid #ccc";
-              input.style.padding = "2px 4px";
-            input.style.fontSize = `${fieldData.textSize || 12}px`;
-            input.style.backgroundColor = readOnly ? "rgba(240, 240, 240, 0.95)" : "rgba(255, 255, 255, 0.95)";
-              input.style.boxSizing = "border-box";
-            input.style.fontFamily = fieldData.fontFamily || "inherit";
-            
-            // Centraliza o texto nos campos de texto (não em selects, checkboxes ou botões)
-            if (input.type === "text" || input.tagName === "TEXTAREA") {
-              input.style.textAlign = "center";
-            } else if (input.tagName === "SELECT") {
-              // Para selects, centraliza o texto dentro das opções
-              input.style.textAlign = "center";
-            }
-            
-            // Debug para o campo "forca"
-            if (fieldName === "forca") {
-              console.log(`%c🔍 Debug campo "forca":`, "color: #FF5722; font-size: 14px; font-weight: bold;");
-              console.log(`  JSON position:`, fieldData.position);
-              console.log(`  Calculated: left=${left}, top=${top}, width=${width}, height=${height}`);
-              console.log(`  Wrapper width: ${viewport.width}px, height: ${viewport.height}px`);
-              console.log(`  annotationLayerDiv rect:`, annotationLayerDiv.getBoundingClientRect());
-              const inputRect = input.getBoundingClientRect();
-              console.log(`  Input final rect:`, inputRect);
-              console.log(`  Input style left: ${input.style.left}, top: ${input.style.top}`);
-            }
-              
-              annotationLayerDiv.appendChild(input);
-            } catch (fieldErr) {
-            console.warn(`Erro ao renderizar campo ${fieldName}:`, fieldErr);
+        mutations.forEach((mutation) => {
+          mutation.addedNodes.forEach((node) => {
+            // Verifica se o nó adicionado é um campo ou contém campos
+            if (
+              node.nodeType === Node.ELEMENT_NODE &&
+              (node instanceof HTMLInputElement ||
+                node instanceof HTMLTextAreaElement ||
+                node instanceof HTMLSelectElement ||
+                (node instanceof Element &&
+                  (node.querySelector("input") ||
+                    node.querySelector("textarea") ||
+                    node.querySelector("select"))))
+            ) {
+              hasNewFields = true;
             }
           });
-      }
+        });
 
-      setPdfLoaded(true);
-
-      // Coleta valores iniciais após carregar
-      setTimeout(() => {
-        if (mounted) collectFieldValues();
-      }, 1000);
-    }
-
-    init().catch((err) => {
-      console.error("Erro ao carregar PDF.js:", err);
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, [pdfUrl, collectFieldValues]);
-
-  // Observa mudanças nos campos do formulário
-  useEffect(() => {
-    if (!pdfLoaded) return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    function handleFieldChange() {
-      collectFieldValues();
-    }
-
-    // Adiciona listeners para mudanças nos campos (busca em toda a estrutura)
-    const inputs = container.querySelectorAll(
-      "input, textarea, select"
-    );
-
-    inputs.forEach((input) => {
-      input.addEventListener("input", handleFieldChange);
-      input.addEventListener("change", handleFieldChange);
-    });
-
-    return () => {
-      inputs.forEach((input) => {
-        input.removeEventListener("input", handleFieldChange);
-        input.removeEventListener("change", handleFieldChange);
-      });
-    };
-  }, [pdfLoaded, collectFieldValues]); // collectFieldValues é estável (useCallback sem deps)
-
-  // Atualiza os campos quando initialValues mudar (após o PDF carregar)
-  useEffect(() => {
-    if (!pdfLoaded || !initialValues) return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    // Atualiza todos os campos com os valores de initialValues
-    Object.entries(initialValues).forEach(([fieldName, value]) => {
-      const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-        `[name="${fieldName}"]`
-      );
-      
-      if (input) {
-        if (input.type === "checkbox") {
-          const strValue = String(value || "");
-          (input as HTMLInputElement).checked = strValue === "Yes" || strValue === "on" || strValue === "true";
-        } else if (input.type !== "button") {
-          input.value = String(value || "");
+        // Se novos campos foram adicionados, re-adiciona listeners
+        if (hasNewFields) {
+          console.log("Novos campos detectados, re-adicionando listeners");
+          addListenersToAllFields();
+          // Coleta valores novamente para garantir que temos todos os campos
+          setTimeout(() => {
+            collectFieldValues();
+          }, 100);
         }
-      }
-    });
+      });
 
-    // Coleta os valores atualizados
-    setTimeout(() => {
-      collectFieldValues();
-    }, 100);
-  }, [initialValues, pdfLoaded, collectFieldValues]);
+      // Observa mudanças no container (incluindo sub-árvore)
+      observer.observe(container, {
+        childList: true,
+        subtree: true,
+      });
 
-  return (
-    <div className="w-full h-full">
-      <div ref={containerRef} className="w-full" />
-    </div>
-  );
-}
+      return () => {
+        observer.disconnect();
+        const inputs = container.querySelectorAll("input, textarea, select");
+        inputs.forEach((input) => {
+          input.removeEventListener("input", handleFieldChange);
+          input.removeEventListener("change", handleFieldChange);
+          input.removeEventListener("blur", handleFieldChange);
+        });
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pdfLoaded]);
 
+    // Atualiza os campos quando initialValues mudar (após o PDF carregar)
+    useEffect(() => {
+      if (!pdfLoaded || !initialValues) return;
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      // Atualiza todos os campos com os valores de initialValues
+      Object.entries(initialValues).forEach(([fieldName, value]) => {
+        const input = container.querySelector<
+          HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+        >(`[name="${fieldName}"]`);
+
+        if (input) {
+          if (input.type === "checkbox") {
+            const strValue = String(value || "");
+            (input as HTMLInputElement).checked =
+              strValue === "Yes" || strValue === "on" || strValue === "true";
+          } else if (input.type !== "button") {
+            input.value = String(value || "");
+          }
+        }
+      });
+
+      // Coleta os valores atualizados
+      setTimeout(() => {
+        collectFieldValues();
+      }, 100);
+    }, [initialValues, pdfLoaded, collectFieldValues]);
+
+    return (
+      <div
+        className="w-full overflow-x-hidden"
+        style={{
+          marginBottom: "0",
+          paddingBottom: "0",
+          backgroundColor: "#ffffff",
+          position: "relative", // Container pai precisa ser relative para o absolute do filho funcionar
+          minHeight: "600px", // Altura mínima para o container funcionar
+        }}
+      >
+        <div
+          id="viewerContainer"
+          className="pdfViewerContainer"
+          ref={containerRef}
+          style={{
+            width: "100%",
+            height: "100%",
+            minHeight: "400px", // GARANTE QUE NUNCA SERÁ ZERO - evita erro do PDF.js
+            // position será definido como absolute durante a inicialização (requisito do PDF.js)
+            overflow: "auto",
+            backgroundColor: "#ffffff",
+          }}
+        />
+      </div>
+    );
+  }
+);
+
+PdfJsViewer.displayName = "PdfJsViewer";
+
+export default PdfJsViewer;

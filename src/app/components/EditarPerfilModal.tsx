@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, useToastContext } from "@/components/ui";
 import { supabase } from "../../../lib/supabaseClient";
 import { getFotoPerfilUrl, getPublicUrl } from "../../../lib/storageUtils";
 import type { User } from "@supabase/supabase-js";
@@ -20,6 +20,7 @@ export default function EditarPerfilModal({
   user,
   onUpdate,
 }: EditarPerfilModalProps) {
+  const { error: showError, success, warning } = useToastContext();
   const [nome, setNome] = useState("");
   const [apelido, setApelido] = useState("");
   const [senha, setSenha] = useState("");
@@ -61,13 +62,13 @@ export default function EditarPerfilModal({
 
     // Validação: apenas imagens
     if (!file.type.startsWith("image/")) {
-      alert("Por favor, selecione apenas arquivos de imagem!");
+      warning("Por favor, selecione apenas arquivos de imagem!");
       return;
     }
 
     // Validação: tamanho máximo 5MB
     if (file.size > 5 * 1024 * 1024) {
-      alert("A imagem deve ter no máximo 5MB!");
+      warning("A imagem deve ter no máximo 5MB!");
       return;
     }
 
@@ -134,11 +135,11 @@ export default function EditarPerfilModal({
     // Validação de senha
     if (senha || confirmarSenha) {
       if (senha !== confirmarSenha) {
-        alert("As senhas não conferem!");
+        warning("As senhas não conferem!");
         return;
       }
       if (senha.length < 6) {
-        alert("A senha deve ter pelo menos 6 caracteres!");
+        warning("A senha deve ter pelo menos 6 caracteres!");
         return;
       }
     }
@@ -192,7 +193,7 @@ export default function EditarPerfilModal({
         console.warn("Tabela perfil não existe ou erro ao atualizar:", perfilError);
       }
 
-      alert("Perfil atualizado com sucesso!");
+      success("Perfil atualizado com sucesso!");
       setSenha("");
       setConfirmarSenha("");
       setFotoPerfil(null);
@@ -202,7 +203,7 @@ export default function EditarPerfilModal({
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
-      alert("Erro ao atualizar perfil: " + errorMessage);
+      showError(`Erro ao atualizar perfil: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
