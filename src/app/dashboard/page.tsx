@@ -13,7 +13,14 @@ import EditarPerfilModal from "../components/EditarPerfilModal";
 import Sidebar from "../components/Sidebar";
 import { useSupabasePdf } from "../../hooks/useSupabasePdf";
 import { useSupabaseSessao, Sessao } from "../../hooks/useSupabaseSessao";
-import { Card, CardHeader, CardTitle, CardContent, Badge, Loading, EmptyState } from "@/components/ui";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Badge,
+  Loading,
+} from "@/components/ui";
 
 type FichaListItem = {
   id: string;
@@ -70,7 +77,7 @@ export default function DashboardPage() {
     return () => subscription.unsubscribe();
   }, [router]);
 
- // Re-executa apenas quando o ID do usuário mudar
+  // Re-executa apenas quando o ID do usuário mudar
 
   // Carrega as fichas do usuário quando ele estiver logado
   useEffect(() => {
@@ -92,41 +99,153 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // Função para carregar sessões (reutilizável)
+  async function loadSessoes() {
+    if (!user) return;
+
+    try {
+      setLoadingSessoes(true);
+      // Busca sessões como mestre e como jogador
+      const [sessoesMestre, sessoesJogador] = await Promise.all([
+        getSessoesMestre(),
+        getSessoesJogador(),
+      ]);
+
+      // Combina as sessões e remove duplicatas (caso o usuário seja mestre e jogador)
+      const todasSessoes = [...sessoesMestre, ...sessoesJogador];
+      const sessoesUnicas = todasSessoes.filter(
+        (sessao, index, self) =>
+          index === self.findIndex((s) => s.id === sessao.id)
+      );
+
+      // Ordena por data de criação (mais recente primeiro)
+      sessoesUnicas.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      setSessoes(sessoesUnicas);
+    } catch (error) {
+      console.error("Erro ao carregar sessões:", error);
+    } finally {
+      setLoadingSessoes(false);
+    }
+  }
+
   // Carrega as sessões do usuário quando ele estiver logado
   useEffect(() => {
-    async function loadSessoes() {
-      if (!user) return;
+    loadSessoes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
-      try {
-        setLoadingSessoes(true);
-        // Busca sessões como mestre e como jogador
-        const [sessoesMestre, sessoesJogador] = await Promise.all([
-          getSessoesMestre(),
-          getSessoesJogador(),
-        ]);
-
-        // Combina as sessões e remove duplicatas (caso o usuário seja mestre e jogador)
-        const todasSessoes = [...sessoesMestre, ...sessoesJogador];
-        const sessoesUnicas = todasSessoes.filter(
-          (sessao, index, self) =>
-            index === self.findIndex((s) => s.id === sessao.id)
-        );
-
-        // Ordena por data de criação (mais recente primeiro)
-        sessoesUnicas.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-
-        setSessoes(sessoesUnicas);
-      } catch (error) {
-        console.error("Erro ao carregar sessões:", error);
-      } finally {
-        setLoadingSessoes(false);
+  // Recarrega sessões quando a página ganha foco ou quando muda para aba de sessões
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user && activeTab === "sessoes") {
+        loadSessoes();
       }
+    };
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === "visible" &&
+        user &&
+        activeTab === "sessoes"
+      ) {
+        loadSessoes();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Recarrega quando muda para aba de sessões
+    if (activeTab === "sessoes" && user) {
+      loadSessoes();
     }
 
-    loadSessoes();
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, activeTab]);
+
+  // Listener para atualizar lista de sessões em tempo real
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`dashboard-sessoes-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "sessao",
+        },
+        () => {
+          // Recarrega as sessões quando há mudanças
+          // Filtra apenas sessões relevantes (mestre ou jogador)
+          loadSessoes();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "sessao_jogador",
+        },
+        () => {
+          // Recarrega quando há mudanças em sessao_jogador
+          // (jogador entrando/saindo de sessões)
+          loadSessoes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Listener para atualizar lista de fichas em tempo real
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`dashboard-fichas-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "ficha",
+        },
+        async (payload) => {
+          // Verifica se a ficha pertence ao usuário atual
+          const fichaData = payload.new || payload.old;
+          if (fichaData && fichaData.usuarioId === user.id) {
+            // Recarrega as fichas quando há mudanças nas fichas do usuário
+            try {
+              setLoadingFichas(true);
+              const fichasData = await getUserFichas();
+              setFichas(fichasData);
+            } catch (error) {
+              console.error("Erro ao recarregar fichas:", error);
+            } finally {
+              setLoadingFichas(false);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -162,24 +281,7 @@ export default function DashboardPage() {
     try {
       const sessao = await criarSessao(nome, descricao);
       // Recarrega as sessões após criar
-      try {
-        const [sessoesMestre, sessoesJogador] = await Promise.all([
-          getSessoesMestre(),
-          getSessoesJogador(),
-        ]);
-        const todasSessoes = [...sessoesMestre, ...sessoesJogador];
-        const sessoesUnicas = todasSessoes.filter(
-          (sessao, index, self) =>
-            index === self.findIndex((s) => s.id === sessao.id)
-        );
-        sessoesUnicas.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setSessoes(sessoesUnicas);
-      } catch (error) {
-        console.error("Erro ao recarregar sessões:", error);
-      }
+      await loadSessoes();
       router.push(`/session/${sessao.id}`);
     } catch (error: unknown) {
       console.error("Erro ao criar sessão:", error);
@@ -193,24 +295,7 @@ export default function DashboardPage() {
     try {
       await entrarSessao(sessaoId);
       // Recarrega as sessões após entrar
-      try {
-        const [sessoesMestre, sessoesJogador] = await Promise.all([
-          getSessoesMestre(),
-          getSessoesJogador(),
-        ]);
-        const todasSessoes = [...sessoesMestre, ...sessoesJogador];
-        const sessoesUnicas = todasSessoes.filter(
-          (sessao, index, self) =>
-            index === self.findIndex((s) => s.id === sessao.id)
-        );
-        sessoesUnicas.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        setSessoes(sessoesUnicas);
-      } catch (error) {
-        console.error("Erro ao recarregar sessões:", error);
-      }
+      await loadSessoes();
       router.push(`/session/${sessaoId}`);
     } catch (error: unknown) {
       console.error("Erro ao entrar na sessão:", error);
@@ -233,7 +318,6 @@ export default function DashboardPage() {
       console.error("Erro ao recarregar fichas:", error);
     }
   }
-
 
   if (loading) {
     return (
@@ -301,23 +385,27 @@ export default function DashboardPage() {
                     {/* Lista de fichas */}
                     {fichas.length === 0 ? (
                       <>
-                        <div className="col-span-full">
-                          <EmptyState
-                            title="Nenhuma ficha encontrada"
-                            description='Clique no botão "+" para criar uma nova ficha.'
-                            action={
-                              <button
-                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
-                                onClick={handleOpenNewFicha}
-                              >
-                                <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
-                                <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
-                                  Nova Ficha
-                                </p>
-                              </button>
-                            }
-                          />
-                        </div>
+                        <Card className="ficha-card flex flex-col items-center justify-center">
+                          <CardHeader className="text-center w-full">
+                            <CardTitle className="text-lg mb-2">
+                              Nenhuma ficha encontrada
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="flex flex-col items-center justify-center flex-1 w-full">
+                            <p className="text-sm text-gray-600 mb-4 text-center">
+                              Clique no botão abaixo para criar sua primeira ficha.
+                            </p>
+                            <button
+                              className="flex flex-col items-center justify-center min-h-[120px] w-full border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer rounded-lg p-4"
+                              onClick={handleOpenNewFicha}
+                            >
+                              <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
+                              <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                                Nova Ficha
+                              </p>
+                            </button>
+                          </CardContent>
+                        </Card>
                       </>
                     ) : (
                       <>
@@ -370,29 +458,36 @@ export default function DashboardPage() {
                     {/* Lista de sessões */}
                     {sessoes.length === 0 ? (
                       <>
-                        <div className="col-span-full">
-                          <EmptyState
-                            title="Nenhuma sessão encontrada"
-                            description='Clique no botão "+" para criar uma nova sessão.'
-                            action={
-                              <button
-                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
-                                onClick={() => setIsCriarSessaoModalOpen(true)}
-                              >
-                                <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
-                                <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
-                                  Nova Sessão
-                                </p>
-                              </button>
-                            }
-                          />
-                        </div>
+                        <Card className="ficha-card flex flex-col items-center justify-center">
+                          <CardHeader className="text-center w-full">
+                            <CardTitle className="text-lg mb-2">
+                              Nenhuma sessão encontrada
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="flex flex-col items-center justify-center flex-1 w-full">
+                            <p className="text-sm text-gray-600 mb-4 text-center">
+                              Clique no botão abaixo para criar sua primeira sessão.
+                            </p>
+                            <button
+                              className="flex flex-col items-center justify-center min-h-[120px] w-full border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer rounded-lg p-4"
+                              onClick={() => setIsCriarSessaoModalOpen(true)}
+                            >
+                              <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
+                              <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                                Nova Sessão
+                              </p>
+                            </button>
+                          </CardContent>
+                        </Card>
                       </>
                     ) : (
                       <>
                         {sessoes.map((sessao) => {
                           const isMestre = sessao.mestre_id === user?.id;
-                          const statusMap: Record<string, "active" | "paused" | "ended"> = {
+                          const statusMap: Record<
+                            string,
+                            "active" | "paused" | "ended"
+                          > = {
                             ativa: "active",
                             pausada: "paused",
                             encerrada: "ended",
@@ -417,16 +512,17 @@ export default function DashboardPage() {
                                         {sessao.nome}
                                       </CardTitle>
                                       {isMestre && (
-                                        <Badge variant="default" className="bg-brand text-primary">
+                                        <Badge
+                                          variant="default"
+                                          className="bg-brand text-primary"
+                                        >
                                           Mestre
                                         </Badge>
                                       )}
                                     </div>
                                   </div>
                                   <Badge
-                                    status={
-                                      statusMap[sessao.status] || "ended"
-                                    }
+                                    status={statusMap[sessao.status] || "ended"}
                                   />
                                 </div>
                               </CardHeader>

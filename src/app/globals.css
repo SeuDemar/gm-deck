@@ -23,6 +23,16 @@
   --color-text-secondary: #e0d4d2;
   /* Texto secundário */
 
+  /* Cores semânticas (para Badge e outros componentes) */
+  --color-success: #10b981;
+  --color-success-light: #34d399;
+  --color-error: #ef4444;
+  --color-error-light: #f87171;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fbbf24;
+  --color-info: #3b82f6;
+  --color-info-light: #60a5fa;
+
   /* Fontes */
   --font-sans: "Inter", sans-serif;
   /* Fonte principal do projeto */

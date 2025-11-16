@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import Modal from "./Modal";
 import PdfJsViewer from "./PdfJsViewer";
 import { useSupabasePdf } from "@/hooks/useSupabasePdf";
+import { Button, Loading } from "@/components/ui";
 
 interface PdfFichaModalProps {
   isOpen: boolean;
@@ -95,15 +96,21 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete, read
 
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
-      {/* Conteúdo da modal */}
-      <div className="w-full h-full p-4 overflow-hidden flex flex-col">
-        <h2 className="text-2xl font-semibold mb-4">Ficha do Personagem</h2>
+      <div className="w-full h-full p-6 overflow-hidden flex flex-col">
+        <h2 className="text-2xl font-bold mb-6 text-black">Ficha do Personagem</h2>
 
         {/* PDF Viewer ocupa o restante da tela */}
-        <div className="flex-1 min-h-0 overflow-auto rounded-md border p-2 bg-white">
+        <div 
+          className="flex-1 min-h-0 overflow-auto rounded-lg border"
+          style={{
+            borderColor: "var(--color-border)",
+            backgroundColor: "var(--color-background-white)",
+            padding: "var(--spacing-4)",
+          }}
+        >
           {loadingData ? (
             <div className="flex items-center justify-center h-full">
-              <span className="text-lg">Carregando dados da ficha...</span>
+              <Loading message="Carregando dados da ficha..." />
             </div>
           ) : (
             <PdfJsViewer
@@ -117,28 +124,33 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete, read
 
         {/* Botões - apenas se não for readOnly */}
         {!readOnly && (
-          <div className="mt-4 flex gap-3 justify-end">
+          <div className="mt-6 flex gap-3 justify-end">
             {fichaId && (
-              <button
-                disabled={deleting || loading}
+              <Button
+                variant="danger"
                 onClick={handleDeleteFicha}
-                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                isLoading={deleting}
+                disabled={deleting || loading}
               >
                 {deleting ? "Excluindo..." : "Deletar Ficha"}
-              </button>
+              </Button>
             )}
-            <button
-              disabled={loading || deleting}
+            <Button
+              variant="primary"
               onClick={salvarFicha}
-              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+              isLoading={loading}
+              disabled={loading || deleting}
             >
               {loading ? "Salvando..." : "Salvar Ficha"}
-            </button>
+            </Button>
           </div>
         )}
         {readOnly && (
-          <div className="mt-4 flex justify-center">
-            <p className="text-sm text-gray-600 italic">
+          <div className="mt-6 flex justify-center">
+            <p 
+              className="text-sm italic"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               Modo somente leitura - Esta ficha pertence a outro jogador
             </p>
           </div>

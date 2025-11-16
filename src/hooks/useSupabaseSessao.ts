@@ -79,6 +79,7 @@ export function useSupabaseSessao() {
   }
 
   // --- Buscar sessões onde o usuário é jogador
+  // Retorna todas as sessões onde o usuário está como jogador, independente do status
   async function getSessoesJogador() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -93,7 +94,7 @@ export function useSupabaseSessao() {
         sessao:sessao_id (*)
       `)
       .eq("usuario_id", user.id)
-      .eq("status", "aceito")
+      // Remove o filtro de status para buscar todas as sessões (aceito, pendente, recusado)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -166,45 +167,66 @@ export function useSupabaseSessao() {
     return jogadoresComPerfil;
   }
 
-  // --- Adicionar jogador à sessão (mestre convida jogador)
-  async function adicionarJogador(sessaoId: string, usuarioId: string, fichaId?: string) {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
-    }
-
-    // Verifica se o usuário é o mestre da sessão
-    const { data: sessao, error: checkError } = await supabase
-      .from("sessao")
-      .select("mestre_id")
-      .eq("id", sessaoId)
-      .single();
-
-    if (checkError || !sessao || sessao.mestre_id !== user.id) {
-      throw new Error("Você não tem permissão para adicionar jogadores nesta sessão.");
-    }
-
-    const { data, error } = await supabase
+  // --- Buscar todos os usuários com status na sessão
+  // Busca apenas os usuários que estão relacionados à sessão (na tabela sessao_jogador)
+  async function getAllUsuariosComStatusSessao(sessaoId: string) {
+    // Busca jogadores da sessão
+    const { data: jogadoresSessao, error: sessaoError } = await supabase
       .from("sessao_jogador")
-      .insert([{
-        sessao_id: sessaoId,
-        usuario_id: usuarioId,
-        ficha_id: fichaId || null,
-        status: "pendente"
-      }])
-      .select()
-      .single();
+      .select(`
+        *,
+        ficha:ficha_id (id, personagem)
+      `)
+      .eq("sessao_id", sessaoId);
 
-    if (error) {
-      console.error("Erro ao adicionar jogador:", error);
-      throw error;
+    if (sessaoError) {
+      console.error("Erro ao buscar jogadores da sessão:", sessaoError);
+      throw sessaoError;
     }
 
-    return data;
+    // Busca informações do perfil de cada jogador
+    const usuariosComStatus = await Promise.all(
+      (jogadoresSessao || []).map(async (jogador) => {
+        try {
+          // Busca na tabela perfil
+          const { data: perfilData } = await supabase
+            .from("perfil")
+            .select("nome, apelido")
+            .eq("id", jogador.usuario_id)
+            .single();
+
+          return {
+            usuario_id: jogador.usuario_id,
+            nome: perfilData?.nome || null,
+            apelido: perfilData?.apelido || null,
+            status: jogador.status,
+            ficha_id: jogador.ficha_id || null,
+            ficha: jogador.ficha || null,
+            sessao_jogador_id: jogador.id,
+            created_at: jogador.created_at,
+            updated_at: jogador.updated_at,
+          };
+        } catch (error) {
+          console.error(`Erro ao buscar perfil do jogador ${jogador.usuario_id}:`, error);
+          return {
+            usuario_id: jogador.usuario_id,
+            nome: null,
+            apelido: null,
+            status: jogador.status,
+            ficha_id: jogador.ficha_id || null,
+            ficha: jogador.ficha || null,
+            sessao_jogador_id: jogador.id,
+            created_at: jogador.created_at,
+            updated_at: jogador.updated_at,
+          };
+        }
+      })
+    );
+
+    return usuariosComStatus;
   }
 
-  // --- Entrar em sessão (jogador aceita convite ou mestre adiciona diretamente)
+  // --- Entrar em sessão (jogador entra usando o ID da sessão)
   async function entrarSessao(sessaoId: string, fichaId?: string) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -233,7 +255,7 @@ export function useSupabaseSessao() {
         .single();
 
       if (error) {
-        console.error("Erro ao atualizar convite:", error);
+        console.error("Erro ao atualizar entrada na sessão:", error);
         throw error;
       }
 
@@ -324,7 +346,7 @@ export function useSupabaseSessao() {
       .single();
 
     if (fetchError || !sessaoJogador) {
-      throw new Error("Convite não encontrado.");
+      throw new Error("Registro de jogador não encontrado.");
     }
 
     const sessao = sessaoJogador.sessao as { mestre_id: string };
@@ -498,6 +520,39 @@ export function useSupabaseSessao() {
     }
   }
 
+  // --- Atualizar status do jogador na sessão (para marcar como inativo quando sair)
+  async function atualizarStatusJogadorSessao(sessaoId: string, status: JogadorStatus) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("Usuário não autenticado. Por favor, faça login novamente.");
+    }
+
+    // Busca o registro do jogador na sessão
+    const { data: sessaoJogador, error: checkError } = await supabase
+      .from("sessao_jogador")
+      .select("id")
+      .eq("sessao_id", sessaoId)
+      .eq("usuario_id", user.id)
+      .single();
+
+    if (checkError || !sessaoJogador) {
+      // Se não existe registro, não precisa atualizar
+      return;
+    }
+
+    // Atualiza o status do jogador
+    const { error: updateError } = await supabase
+      .from("sessao_jogador")
+      .update({ status })
+      .eq("id", sessaoJogador.id);
+
+    if (updateError) {
+      console.error("Erro ao atualizar status do jogador na sessão:", updateError);
+      throw updateError;
+    }
+  }
+
   // --- Atualizar nome e descrição da sessão
   async function atualizarSessao(sessaoId: string, nome: string, descricao?: string | null) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -547,7 +602,7 @@ export function useSupabaseSessao() {
     getSessoesJogador,
     getSessao,
     getJogadoresSessao,
-    adicionarJogador,
+    getAllUsuariosComStatusSessao,
     entrarSessao,
     removerJogador,
     atualizarFichaIdsSessao,
@@ -555,6 +610,7 @@ export function useSupabaseSessao() {
     cortarVinculosSessao,
     selecionarFichaSessao,
     atualizarStatusSessao,
+    atualizarStatusJogadorSessao,
     atualizarSessao,
   };
 }

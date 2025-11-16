@@ -2,17 +2,97 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Paintbrush } from "lucide-react";
 import { supabase } from "../../../../lib/supabaseClient";
 import { getFotoPerfilUrl } from "../../../../lib/storageUtils";
 import { useSessaoRole } from "../../../hooks/useSessaoRole";
-import { Sessao, useSupabaseSessao } from "../../../hooks/useSupabaseSessao";
+import {
+  Sessao,
+  SessaoStatus,
+  useSupabaseSessao,
+} from "../../../hooks/useSupabaseSessao";
 import { useSupabasePdf } from "../../../hooks/useSupabasePdf";
 import PdfFichaModal from "../../components/PdfFichaModal";
 import EditarSessaoModal from "../../components/EditarSessaoModal";
 import Sidebar from "../../components/Sidebar";
-import { Button, Card, CardHeader, CardTitle, CardContent, Badge, Loading, EmptyState, Avatar } from "@/components/ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  Badge,
+  Loading,
+  EmptyState,
+  Avatar,
+} from "@/components/ui";
 import "../../globals.css";
+
+// Função para gerar uma cor aleatória consistente baseada no nome
+function getPersonagemColor(
+  personagem: string | null,
+  fichaId?: string,
+  customColors?: Record<string, string>
+): string {
+  // Se houver cor customizada para esta ficha, usa ela
+  if (fichaId && customColors && customColors[fichaId]) {
+    return customColors[fichaId];
+  }
+
+  if (!personagem) return "rgba(107, 114, 128, 0.2)"; // cinza padrão
+
+  // Gera um hash simples do nome
+  let hash = 0;
+  for (let i = 0; i < personagem.length; i++) {
+    hash = personagem.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // Gera cores vibrantes mas não muito escuras
+  const hue = Math.abs(hash) % 360;
+  const saturation = 60 + (Math.abs(hash) % 20); // 60-80%
+  const lightness = 45 + (Math.abs(hash) % 15); // 45-60%
+
+  return `hsla(${hue}, ${saturation}%, ${lightness}%, 0.2)`;
+}
+
+// Função para gerar a cor do texto (mais escura)
+function getPersonagemTextColor(
+  personagem: string | null,
+  fichaId?: string,
+  customColors?: Record<string, string>
+): string {
+  // Se houver cor customizada, calcula uma cor de texto mais escura baseada nela
+  if (fichaId && customColors && customColors[fichaId]) {
+    const bgColor = customColors[fichaId];
+    // Extrai a cor RGB da string rgba/hsla
+    const match = bgColor.match(/\d+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0]);
+      const g = parseInt(match[1]);
+      const b = parseInt(match[2]);
+      // Calcula luminosidade e ajusta para texto escuro
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      if (luminance > 0.5) {
+        return `rgb(${Math.max(0, r - 100)}, ${Math.max(0, g - 100)}, ${Math.max(0, b - 100)})`;
+      }
+      return `rgb(${Math.min(255, r + 50)}, ${Math.min(255, g + 50)}, ${Math.min(255, b + 50)})`;
+    }
+  }
+
+  if (!personagem) return "#374151"; // cinza escuro padrão
+
+  let hash = 0;
+  for (let i = 0; i < personagem.length; i++) {
+    hash = personagem.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const hue = Math.abs(hash) % 360;
+  const saturation = 60 + (Math.abs(hash) % 20);
+  const lightness = 25 + (Math.abs(hash) % 10); // 25-35% (mais escuro para texto)
+
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
 
 export default function SessionPage() {
   const router = useRouter();
@@ -27,19 +107,21 @@ export default function SessionPage() {
   const [loadingSessao, setLoadingSessao] = useState(false);
   const [copied, setCopied] = useState(false);
   interface JogadorSessao {
-    id: string;
-    sessao_id: string;
     usuario_id: string;
-    ficha_id: string | null;
-    status: string;
-    created_at: string;
-    updated_at: string;
     nome: string | null;
     apelido: string | null;
+    status: string | null; // null se não está na sessão
+    ficha_id: string | null;
     ficha: {
       id: string;
       personagem: string | null;
     } | null;
+    sessao_jogador_id: string | null; // id do registro em sessao_jogador, null se não está na sessão
+    created_at: string | null;
+    updated_at: string | null;
+    // Campos opcionais para compatibilidade
+    id?: string;
+    sessao_id?: string;
   }
 
   interface FichaSessao {
@@ -71,15 +153,17 @@ export default function SessionPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [isEditarSessaoModalOpen, setIsEditarSessaoModalOpen] = useState(false);
+  const [fichaColors, setFichaColors] = useState<Record<string, string>>({});
 
   // Hook para gerenciar sessões
   const {
     getSessao,
     excluirSessao,
     cortarVinculosSessao,
-    getJogadoresSessao,
+    getAllUsuariosComStatusSessao,
     selecionarFichaSessao,
     atualizarStatusSessao,
+    atualizarStatusJogadorSessao,
     atualizarSessao,
   } = useSupabaseSessao();
   const getSessaoRef = useRef(getSessao);
@@ -256,6 +340,38 @@ export default function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sessaoId, isMestre, loadingPapel]);
 
+  // Atualiza status do jogador quando entra/sai da sessão
+  useEffect(() => {
+    async function updateJogadorStatusOnMount() {
+      if (!user || !sessaoId || !isJogador || loadingPapel) return;
+
+      try {
+        // Quando o jogador entra na sessão, atualiza status para "aceito"
+        await atualizarStatusJogadorSessao(sessaoId, "aceito");
+        // Recarrega a lista de jogadores para atualizar a badge
+        await loadJogadores();
+      } catch (error) {
+        console.error("Erro ao atualizar status do jogador:", error);
+      }
+    }
+
+    // Aguarda um pouco para garantir que o papel foi verificado
+    if (!loadingPapel && isJogador) {
+      updateJogadorStatusOnMount();
+    }
+
+    // Cleanup: quando o componente desmonta ou o jogador sai, marca como "pendente" (inativo)
+    return () => {
+      // Só atualiza se o usuário ainda está logado e é jogador
+      if (user && sessaoId && isJogador && !loadingPapel) {
+        atualizarStatusJogadorSessao(sessaoId, "pendente").catch((error) => {
+          console.error("Erro ao atualizar status do jogador ao sair:", error);
+        });
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sessaoId, isJogador, loadingPapel]);
+
   // Carrega dados do mestre (para jogador ver)
   useEffect(() => {
     async function loadMestre() {
@@ -341,41 +457,43 @@ export default function SessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessaoId, sessao, isMestre, isJogador, loadingPapel]);
 
-  // Carrega jogadores da sessão (para mestre e jogador)
-  useEffect(() => {
-    async function loadJogadores() {
-      if (!user || !sessaoId || (!isMestre && !isJogador)) {
-        setJogadores([]);
-        return;
-      }
-
-      setLoadingJogadores(true);
-      try {
-        const jogadoresData = await getJogadoresSessao(sessaoId);
-        setJogadores(jogadoresData || []);
-
-        // Carrega fotos de perfil de todos os jogadores
-        const fotos: Record<string, string | null> = {};
-        for (const jogador of jogadoresData || []) {
-          try {
-            const fotoUrl = await getFotoPerfilUrl(jogador.usuario_id, null);
-            fotos[jogador.usuario_id] = fotoUrl;
-          } catch (error) {
-            console.error(
-              `Erro ao carregar foto do jogador ${jogador.usuario_id}:`,
-              error
-            );
-            fotos[jogador.usuario_id] = null;
-          }
-        }
-        setFotosPerfil(fotos);
-      } catch (error) {
-        console.error("Erro ao carregar jogadores:", error);
-      } finally {
-        setLoadingJogadores(false);
-      }
+  // Função para carregar jogadores (reutilizável)
+  async function loadJogadores() {
+    if (!user || !sessaoId || (!isMestre && !isJogador)) {
+      setJogadores([]);
+      return;
     }
 
+    setLoadingJogadores(true);
+    try {
+      // Busca todos os usuários com status na sessão
+      const todosUsuarios = await getAllUsuariosComStatusSessao(sessaoId);
+      setJogadores(todosUsuarios);
+
+      // Carrega fotos de perfil de todos os usuários
+      const fotos: Record<string, string | null> = {};
+      for (const usuario of todosUsuarios) {
+        try {
+          const fotoUrl = await getFotoPerfilUrl(usuario.usuario_id, null);
+          fotos[usuario.usuario_id] = fotoUrl;
+        } catch (error) {
+          console.error(
+            `Erro ao carregar foto do usuário ${usuario.usuario_id}:`,
+            error
+          );
+          fotos[usuario.usuario_id] = null;
+        }
+      }
+      setFotosPerfil(fotos);
+    } catch (error) {
+      console.error("Erro ao carregar jogadores:", error);
+    } finally {
+      setLoadingJogadores(false);
+    }
+  }
+
+  // Carrega jogadores da sessão (para mestre e jogador)
+  useEffect(() => {
     if (!loadingPapel) {
       loadJogadores();
     }
@@ -433,6 +551,25 @@ export default function SessionPage() {
         // Busca todas as fichas do usuário atual
         const todasFichas = await getUserFichas();
         setFichasSessao(todasFichas);
+
+        // Carrega as cores das fichas
+        if (todasFichas.length > 0) {
+          const fichaIds = todasFichas.map((f) => f.id);
+          const { data, error } = await supabase
+            .from("ficha")
+            .select("id, badge_color")
+            .in("id", fichaIds);
+
+          if (!error && data) {
+            const colors: Record<string, string> = {};
+            data.forEach((ficha) => {
+              if (ficha.badge_color) {
+                colors[ficha.id] = ficha.badge_color;
+              }
+            });
+            setFichaColors((prev) => ({ ...prev, ...colors }));
+          }
+        }
       } catch (error) {
         console.error("Erro ao carregar fichas do jogador:", error);
       } finally {
@@ -466,7 +603,7 @@ export default function SessionPage() {
         // Busca as fichas pelos IDs
         const { data, error } = await supabase
           .from("ficha")
-          .select("id, personagem, created_at, updated_at")
+          .select("id, personagem, created_at, updated_at, badge_color")
           .in("id", sessao.ficha_ids)
           .order("personagem", { ascending: true });
 
@@ -476,6 +613,17 @@ export default function SessionPage() {
         }
 
         setFichasMestre(data || []);
+
+        // Carrega as cores das fichas
+        if (data) {
+          const colors: Record<string, string> = {};
+          data.forEach((ficha) => {
+            if (ficha.badge_color) {
+              colors[ficha.id] = ficha.badge_color;
+            }
+          });
+          setFichaColors((prev) => ({ ...prev, ...colors }));
+        }
       } catch (error) {
         console.error("Erro ao carregar fichas do mestre:", error);
       } finally {
@@ -488,6 +636,199 @@ export default function SessionPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sessaoId, isMestre, sessao, loadingPapel]);
+
+  // Carrega cores das fichas dos jogadores
+  useEffect(() => {
+    async function loadFichaColors() {
+      if (!jogadores.length) return;
+
+      const fichaIds = jogadores
+        .map((j) => j.ficha?.id)
+        .filter((id): id is string => id !== null && id !== undefined);
+
+      if (fichaIds.length === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from("ficha")
+          .select("id, badge_color")
+          .in("id", fichaIds);
+
+        if (error) {
+          console.error("Erro ao carregar cores das fichas:", error);
+          return;
+        }
+
+        if (data) {
+          const colors: Record<string, string> = {};
+          data.forEach((ficha) => {
+            if (ficha.badge_color) {
+              colors[ficha.id] = ficha.badge_color;
+            }
+          });
+          setFichaColors((prev) => ({ ...prev, ...colors }));
+        }
+      } catch (error) {
+        console.error("Erro ao carregar cores das fichas:", error);
+      }
+    }
+
+    loadFichaColors();
+  }, [jogadores]);
+
+  // Listener para atualizar cores em tempo real
+  useEffect(() => {
+    if (!sessaoId) return;
+
+    // Coleta todos os IDs de fichas da sessão
+    const allFichaIds = [
+      ...(sessao?.ficha_ids || []),
+      ...jogadores
+        .map((j) => j.ficha?.id)
+        .filter((id): id is string => id !== null && id !== undefined),
+    ];
+    const uniqueFichaIds = [...new Set(allFichaIds)];
+
+    if (uniqueFichaIds.length === 0) return;
+
+    const channel = supabase
+      .channel(`ficha-colors-${sessaoId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "ficha",
+        },
+        (payload) => {
+          const newData = payload.new as { id: string; badge_color?: string };
+          // Verifica se a ficha atualizada está na lista de fichas da sessão
+          if (newData.id && uniqueFichaIds.includes(newData.id)) {
+            setFichaColors((prev) => {
+              const updated = { ...prev };
+              if (newData.badge_color) {
+                updated[newData.id] = newData.badge_color;
+              } else {
+                // Se badge_color foi removido, remove do estado também
+                delete updated[newData.id];
+              }
+              return updated;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessaoId, sessao?.ficha_ids, jogadores]);
+
+  // Listener para atualizar lista de jogadores em tempo real
+  useEffect(() => {
+    if (!sessaoId || loadingPapel) return;
+
+    const channel = supabase
+      .channel(`sessao-jogadores-${sessaoId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "sessao_jogador",
+          filter: `sessao_id=eq.${sessaoId}`,
+        },
+        () => {
+          // Recarrega a lista de jogadores quando há mudanças
+          loadJogadores();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessaoId, loadingPapel]);
+
+  // Listener para atualizar status da sessão em tempo real
+  useEffect(() => {
+    if (!sessaoId) return;
+
+    const channel = supabase
+      .channel(`sessao-status-${sessaoId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sessao",
+          filter: `id=eq.${sessaoId}`,
+        },
+        (payload) => {
+          const newData = payload.new as {
+            id: string;
+            status?: SessaoStatus;
+            nome?: string;
+            descricao?: string;
+          };
+          // Atualiza os dados da sessão
+          if (newData.id === sessaoId) {
+            setSessao((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                status:
+                  newData.status &&
+                  ["ativa", "encerrada", "pausada"].includes(newData.status)
+                    ? (newData.status as SessaoStatus)
+                    : prev.status,
+                nome: newData.nome || prev.nome,
+                descricao:
+                  newData.descricao !== undefined
+                    ? newData.descricao
+                    : prev.descricao,
+              };
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessaoId]);
+
+  // Listener para atualizar ficha selecionada em tempo real
+  useEffect(() => {
+    if (!sessaoId || !user || !isJogador || loadingPapel) return;
+
+    const channel = supabase
+      .channel(`ficha-selecionada-${sessaoId}-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sessao_jogador",
+          filter: `sessao_id=eq.${sessaoId}&usuario_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newData = payload.new as { ficha_id?: string | null };
+          // Atualiza a ficha selecionada
+          setFichaSelecionadaId(newData.ficha_id || null);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessaoId, user, isJogador, loadingPapel]);
 
   if (loading) {
     return (
@@ -546,7 +887,11 @@ export default function SessionPage() {
                   className="bg-brand-light/30 hover:bg-brand-light/50 flex-shrink-0"
                   title={copied ? "Copiado!" : "Copiar ID"}
                 >
-                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
               {copied && (
@@ -555,7 +900,6 @@ export default function SessionPage() {
                 </p>
               )}
             </div>
-
 
             {/* Informações do Papel */}
             {loadingPapel ? (
@@ -566,16 +910,40 @@ export default function SessionPage() {
               </div>
             ) : isMestre ? (
               <div className="mt-4">
-                <div className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full flex items-center justify-center" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'auto', minHeight: '3rem' }}>
-                  <span className="text-base font-semibold text-primary" style={{ lineHeight: '1.5rem' }}>
+                <div
+                  className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full flex items-center justify-center"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "auto",
+                    minHeight: "3rem",
+                  }}
+                >
+                  <span
+                    className="text-base font-semibold text-primary"
+                    style={{ lineHeight: "1.5rem" }}
+                  >
                     Você é um mestre !
                   </span>
                 </div>
               </div>
             ) : isJogador ? (
               <div className="mt-4">
-                <div className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full flex items-center justify-center" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'auto', minHeight: '3rem' }}>
-                  <span className="text-base font-semibold text-primary" style={{ lineHeight: '1.5rem' }}>
+                <div
+                  className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full flex items-center justify-center"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "auto",
+                    minHeight: "3rem",
+                  }}
+                >
+                  <span
+                    className="text-base font-semibold text-primary"
+                    style={{ lineHeight: "1.5rem" }}
+                  >
                     Você é um jogador !
                   </span>
                 </div>
@@ -605,50 +973,151 @@ export default function SessionPage() {
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 lg:px-6 pt-4 lg:pt-6 pb-6 w-full">
           {/* Cabeçalho com nome da campanha e descrição */}
           <div className="mb-6">
-            <div className="flex items-start justify-between gap-4 mb-3">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-2xl lg:text-3xl font-bold text-black mb-2 break-words">
-                  {sessao?.nome || "Sessão"}
-                </h1>
-                {sessao?.descricao && (
-                  <p className="text-sm lg:text-base text-gray-700 break-words">
-                    {sessao.descricao}
-                  </p>
-                )}
-              </div>
-              {isMestre && sessao && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditarSessaoModalOpen(true)}
-                  className="flex-shrink-0 bg-brand-light/30 hover:bg-brand-light/50"
-                  title="Editar sessão"
-                >
-                  Editar
-                </Button>
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <CardTitle className="text-2xl lg:text-3xl font-bold text-black break-words">
+                        {sessao?.nome || "Sessão"}
+                      </CardTitle>
+                      {/* Badge de Papel e Status */}
+                      {!loadingPapel && (
+                        <div className="flex items-center gap-2">
+                          {isMestre && (
+                            <Badge
+                              variant="default"
+                              className="bg-brand text-primary"
+                            >
+                              Mestre
+                            </Badge>
+                          )}
+                          {isJogador && (
+                            <Badge
+                              variant="default"
+                              className="bg-brand-light text-primary"
+                            >
+                              Jogador
+                            </Badge>
+                          )}
+                          {!isMestre && !isJogador && (
+                            <Badge
+                              variant="default"
+                              className="bg-gray-400 text-primary"
+                            >
+                              Sem Acesso
+                            </Badge>
+                          )}
+                          {sessao && (
+                            <Badge
+                              status={
+                                sessao.status === "ativa"
+                                  ? "active"
+                                  : sessao.status === "pausada"
+                                    ? "paused"
+                                    : "ended"
+                              }
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {isMestre && sessao && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditarSessaoModalOpen(true)}
+                        className="flex-shrink-0 hover:!text-white"
+                        title="Editar sessão"
+                      >
+                        Editar
+                      </Button>
+                    )}
+                  </div>
+                  {sessao?.descricao && (
+                    <CardDescription className="text-sm lg:text-base text-gray-700 break-words">
+                      {sessao.descricao}
+                    </CardDescription>
+                  )}
+                </div>
+              </CardHeader>
+              {isMestre && (
+                <CardContent>
+                  <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">
+                        Total de Jogadores
+                      </p>
+                      <p className="text-2xl font-bold text-black">
+                        {jogadores.filter((j) => j.status === "aceito").length}
+                      </p>
+                    </div>
+                    <div className="h-12 w-px bg-gray-200"></div>
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">
+                        Total de Fichas
+                      </p>
+                      <p className="text-2xl font-bold text-black">
+                        {sessao?.ficha_ids?.length || 0}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
               )}
-            </div>
+              {isJogador && (
+                <CardContent>
+                  <div className="pt-4 border-t border-gray-200">
+                    {loadingMestre ? (
+                      <div className="flex items-center justify-center p-4">
+                        <span className="text-sm animate-pulse text-secondary">
+                          Carregando dados do mestre...
+                        </span>
+                      </div>
+                    ) : mestreData ? (
+                      <Card className="ficha-card">
+                        <CardContent className="p-8">
+                          <div className="flex items-start gap-4">
+                            {/* Foto de perfil */}
+                            <Avatar
+                              src={fotoMestre || undefined}
+                              name={
+                                mestreData.apelido ||
+                                mestreData.nome ||
+                                "Mestre"
+                              }
+                              size="lg"
+                            />
 
-            {/* Badge de Papel */}
-            {!loadingPapel && (
-              <div className="flex items-center gap-2">
-                {isMestre && (
-                  <Badge variant="default" className="bg-brand text-primary">
-                    Mestre
-                  </Badge>
-                )}
-                {isJogador && (
-                  <Badge variant="default" className="bg-brand-light text-primary">
-                    Jogador
-                  </Badge>
-                )}
-                {!isMestre && !isJogador && (
-                  <Badge variant="default" className="bg-gray-400 text-primary">
-                    Sem Acesso
-                  </Badge>
-                )}
-              </div>
-            )}
+                            {/* Informações do mestre */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <CardTitle className="text-xl truncate">
+                                  {mestreData.apelido ||
+                                    mestreData.nome ||
+                                    "Mestre"}
+                                </CardTitle>
+                                <Badge
+                                  variant="default"
+                                  className="bg-brand text-primary"
+                                >
+                                  Mestre
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="p-4 rounded-lg bg-gray-100">
+                        <p className="text-sm text-secondary">
+                          Carregando informações do mestre...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
           </div>
 
           {loadingSessao || loadingPapel ? (
@@ -671,45 +1140,6 @@ export default function SessionPage() {
               {/* Conteúdo específico para Mestre */}
               {isMestre && (
                 <div className="space-y-4">
-                  {/* Estatísticas da Sessão */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card>
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-gray-600 mb-1">
-                          Total de Jogadores
-                        </p>
-                        <p className="text-2xl font-bold text-black">
-                          {jogadores.filter((j) => j.status === "aceito").length}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-gray-600 mb-1">
-                          Total de Fichas
-                        </p>
-                        <p className="text-2xl font-bold text-black">
-                          {sessao?.ficha_ids?.length || 0}
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardContent className="pt-6">
-                        <p className="text-sm text-gray-600 mb-1">Status</p>
-                        <Badge
-                          status={
-                            sessao?.status === "ativa"
-                              ? "active"
-                              : sessao?.status === "pausada"
-                                ? "paused"
-                                : "ended"
-                          }
-                          className="text-lg"
-                        />
-                      </CardContent>
-                    </Card>
-                  </div>
-
                   {/* Lista de Jogadores - Apenas para Mestre */}
                   <div className="p-4 rounded-lg bg-primary shadow-md">
                     <h3 className="text-lg font-semibold mb-4 text-black">
@@ -730,55 +1160,285 @@ export default function SessionPage() {
                             jogador.apelido || jogador.nome || "Jogador";
                           const isCurrentUser = jogador.usuario_id === user?.id;
 
-                          // Função para obter inicial do nome
-                          const getInitial = (name: string) => {
-                            return name.charAt(0).toUpperCase();
-                          };
-
-                          const statusMap: Record<string, "active" | "pending" | "rejected"> = {
-                            aceito: "active",
-                            pendente: "pending",
-                            recusado: "rejected",
-                          };
-
                           return (
                             <Card
                               key={jogador.usuario_id}
                               className="ficha-card"
                             >
-                              <CardContent>
+                              <CardContent className="p-8">
                                 <div className="flex items-start gap-4">
                                   {/* Foto de perfil */}
                                   <Avatar
                                     src={fotoPerfil}
                                     name={displayName}
-                                    size="md"
+                                    size="lg"
                                   />
 
                                   {/* Informações do jogador */}
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <CardTitle className="text-lg truncate">
+                                      <CardTitle className="text-xl truncate">
                                         {isCurrentUser ? "Você" : displayName}
                                       </CardTitle>
                                       {isCurrentUser && (
-                                        <Badge variant="default" className="bg-brand text-primary">
+                                        <Badge
+                                          variant="default"
+                                          className="bg-brand-light text-primary"
+                                        >
                                           Você
                                         </Badge>
                                       )}
+                                      <Badge
+                                        status={
+                                          jogador.status === "aceito"
+                                            ? "active"
+                                            : jogador.status === "pendente"
+                                              ? "inactive" // "pendente" significa que o jogador saiu (inativo)
+                                              : jogador.status === "recusado"
+                                                ? "rejected"
+                                                : "inactive"
+                                        }
+                                      />
                                     </div>
 
                                     {/* Personagem */}
                                     {jogador.ficha ? (
-                                      <div className="mb-2">
-                                        <p className="text-sm text-gray-600 mb-1">
-                                          <span className="font-medium">
-                                            Personagem:
+                                      <div className="mb-2 flex items-center gap-2 flex-wrap">
+                                        <span className="text-base text-gray-600 font-medium">
+                                          Personagem:
+                                        </span>
+                                        <Badge
+                                          style={{
+                                            backgroundColor: getPersonagemColor(
+                                              jogador.ficha.personagem,
+                                              jogador.ficha.id,
+                                              fichaColors
+                                            ),
+                                            color: getPersonagemTextColor(
+                                              jogador.ficha.personagem,
+                                              jogador.ficha.id,
+                                              fichaColors
+                                            ),
+                                          }}
+                                          className="text-base font-semibold"
+                                        >
+                                          {jogador.ficha.personagem ||
+                                            "Sem nome"}
+                                        </Badge>
+                                        {isCurrentUser && jogador.ficha && (
+                                          <span className="relative inline-block">
+                                            <input
+                                              type="color"
+                                              id={`color-picker-${jogador.ficha.id}`}
+                                              style={{
+                                                position: "absolute",
+                                                opacity: 0,
+                                                width: "1px",
+                                                height: "1px",
+                                                pointerEvents: "none",
+                                              }}
+                                              value={(() => {
+                                                const currentColor =
+                                                  fichaColors[
+                                                    jogador.ficha?.id || ""
+                                                  ] ||
+                                                  getPersonagemColor(
+                                                    jogador.ficha?.personagem ||
+                                                      null,
+                                                    jogador.ficha?.id,
+                                                    fichaColors
+                                                  );
+                                                if (
+                                                  currentColor.startsWith(
+                                                    "rgba"
+                                                  )
+                                                ) {
+                                                  const match =
+                                                    currentColor.match(/\d+/g);
+                                                  if (
+                                                    match &&
+                                                    match.length >= 3
+                                                  ) {
+                                                    const r = parseInt(
+                                                      match[0]
+                                                    );
+                                                    const g = parseInt(
+                                                      match[1]
+                                                    );
+                                                    const b = parseInt(
+                                                      match[2]
+                                                    );
+                                                    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+                                                  }
+                                                } else if (
+                                                  currentColor.startsWith(
+                                                    "hsla"
+                                                  )
+                                                ) {
+                                                  const match =
+                                                    currentColor.match(
+                                                      /[\d.]+/g
+                                                    );
+                                                  if (
+                                                    match &&
+                                                    match.length >= 3
+                                                  ) {
+                                                    const h = parseFloat(
+                                                      match[0]
+                                                    );
+                                                    const s =
+                                                      parseFloat(match[1]) /
+                                                      100;
+                                                    const l =
+                                                      parseFloat(match[2]) /
+                                                      100;
+                                                    const c =
+                                                      (1 -
+                                                        Math.abs(2 * l - 1)) *
+                                                      s;
+                                                    const x =
+                                                      c *
+                                                      (1 -
+                                                        Math.abs(
+                                                          ((h / 60) % 2) - 1
+                                                        ));
+                                                    const m = l - c / 2;
+                                                    let r = 0,
+                                                      g = 0,
+                                                      b = 0;
+                                                    if (h < 60) {
+                                                      r = c;
+                                                      g = x;
+                                                      b = 0;
+                                                    } else if (h < 120) {
+                                                      r = x;
+                                                      g = c;
+                                                      b = 0;
+                                                    } else if (h < 180) {
+                                                      r = 0;
+                                                      g = c;
+                                                      b = x;
+                                                    } else if (h < 240) {
+                                                      r = 0;
+                                                      g = x;
+                                                      b = c;
+                                                    } else if (h < 300) {
+                                                      r = x;
+                                                      g = 0;
+                                                      b = c;
+                                                    } else {
+                                                      r = c;
+                                                      g = 0;
+                                                      b = x;
+                                                    }
+                                                    r = Math.round(
+                                                      (r + m) * 255
+                                                    );
+                                                    g = Math.round(
+                                                      (g + m) * 255
+                                                    );
+                                                    b = Math.round(
+                                                      (b + m) * 255
+                                                    );
+                                                    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+                                                  }
+                                                }
+                                                return "#6b7280";
+                                              })()}
+                                              onInput={async (e) => {
+                                                if (!jogador.ficha?.id) return;
+                                                const hex = (
+                                                  e.target as HTMLInputElement
+                                                ).value;
+                                                const r = parseInt(
+                                                  hex.slice(1, 3),
+                                                  16
+                                                );
+                                                const g = parseInt(
+                                                  hex.slice(3, 5),
+                                                  16
+                                                );
+                                                const b = parseInt(
+                                                  hex.slice(5, 7),
+                                                  16
+                                                );
+                                                const newColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
+                                                setFichaColors({
+                                                  ...fichaColors,
+                                                  [jogador.ficha.id]: newColor,
+                                                });
+                                                // Salva no banco de dados
+                                                try {
+                                                  await supabase
+                                                    .from("ficha")
+                                                    .update({
+                                                      badge_color: newColor,
+                                                    })
+                                                    .eq("id", jogador.ficha.id);
+                                                } catch (error) {
+                                                  console.error(
+                                                    "Erro ao salvar cor:",
+                                                    error
+                                                  );
+                                                }
+                                              }}
+                                              onChange={async (e) => {
+                                                if (!jogador.ficha?.id) return;
+                                                const hex = e.target.value;
+                                                const r = parseInt(
+                                                  hex.slice(1, 3),
+                                                  16
+                                                );
+                                                const g = parseInt(
+                                                  hex.slice(3, 5),
+                                                  16
+                                                );
+                                                const b = parseInt(
+                                                  hex.slice(5, 7),
+                                                  16
+                                                );
+                                                const newColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
+                                                setFichaColors({
+                                                  ...fichaColors,
+                                                  [jogador.ficha.id]: newColor,
+                                                });
+                                                // Salva no banco de dados
+                                                try {
+                                                  await supabase
+                                                    .from("ficha")
+                                                    .update({
+                                                      badge_color: newColor,
+                                                    })
+                                                    .eq("id", jogador.ficha.id);
+                                                } catch (error) {
+                                                  console.error(
+                                                    "Erro ao salvar cor:",
+                                                    error
+                                                  );
+                                                }
+                                              }}
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            />
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const colorInput =
+                                                  document.getElementById(
+                                                    `color-picker-${jogador.ficha?.id}`
+                                                  ) as HTMLInputElement;
+                                                if (colorInput) {
+                                                  colorInput.click();
+                                                }
+                                              }}
+                                              className="p-1 rounded hover:bg-gray-100 transition-colors cursor-pointer flex items-center"
+                                              title="Alterar cor"
+                                            >
+                                              <Paintbrush className="w-5 h-5 text-gray-600" />
+                                            </button>
                                           </span>
-                                        </p>
-                                        <p className="text-base font-semibold text-black">
-                                          {jogador.ficha.personagem || "Sem nome"}
-                                        </p>
+                                        )}
                                       </div>
                                     ) : (
                                       <p className="text-sm text-gray-500 italic mb-2">
@@ -786,17 +1446,14 @@ export default function SessionPage() {
                                       </p>
                                     )}
 
-                                    {/* Status */}
-                                    <div className="flex items-center gap-2 mt-2">
-                                      <Badge
-                                        status={statusMap[jogador.status] || "pending"}
-                                      />
-                                      {jogador.nome && !jogador.apelido && (
+                                    {/* Nome completo (se não tiver apelido) */}
+                                    {jogador.nome && !jogador.apelido && (
+                                      <div className="flex items-center gap-2 mt-2">
                                         <p className="text-xs text-gray-500 truncate">
                                           {jogador.nome}
                                         </p>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </CardContent>
@@ -837,16 +1494,32 @@ export default function SessionPage() {
                               }}
                             >
                               <CardHeader>
-                                <CardTitle className="text-lg">
-                                  {ficha.personagem || "Sem nome"}
-                                </CardTitle>
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    style={{
+                                      backgroundColor: getPersonagemColor(
+                                        ficha.personagem,
+                                        ficha.id,
+                                        fichaColors
+                                      ),
+                                      color: getPersonagemTextColor(
+                                        ficha.personagem,
+                                        ficha.id,
+                                        fichaColors
+                                      ),
+                                    }}
+                                    className="text-base font-semibold"
+                                  >
+                                    {ficha.personagem || "Sem nome"}
+                                  </Badge>
+                                </div>
                               </CardHeader>
                               <CardContent>
                                 <p className="text-sm text-gray-600">
                                   Criada em:{" "}
-                                  {new Date(ficha.created_at).toLocaleDateString(
-                                    "pt-BR"
-                                  )}
+                                  {new Date(
+                                    ficha.created_at
+                                  ).toLocaleDateString("pt-BR")}
                                 </p>
                               </CardContent>
                             </Card>
@@ -861,74 +1534,6 @@ export default function SessionPage() {
               {/* Conteúdo específico para Jogador */}
               {isJogador && (
                 <div className="space-y-4">
-
-                  {/* Card do Mestre - Separado dos jogadores */}
-                  {isJogador && (
-                    <div className="p-4 rounded-lg bg-primary shadow-md">
-                      <h3 className="text-lg font-semibold mb-4 text-black">
-                        Mestre da Sessão
-                      </h3>
-                      {loadingMestre ? (
-                        <div className="flex items-center justify-center p-4">
-                          <span className="text-sm animate-pulse text-secondary">
-                            Carregando dados do mestre...
-                          </span>
-                        </div>
-                      ) : mestreData ? (
-                        <div className="ficha-card bg-primary border border-gray-200">
-                          <div className="flex items-start gap-4">
-                            {/* Foto de perfil */}
-                            <div className="flex-shrink-0">
-                              {fotoMestre ? (
-                                <img
-                                  src={fotoMestre}
-                                  alt={
-                                    mestreData.apelido ||
-                                    mestreData.nome ||
-                                    "Mestre"
-                                  }
-                                  className="w-16 h-16 rounded-full object-cover border-2 border-brand"
-                                  onError={(e) => {
-                                    const img = e.target as HTMLImageElement;
-                                    img.style.display = "none";
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-brand text-primary border-2 border-brand">
-                                  {mestreData.apelido || mestreData.nome
-                                    ? (mestreData.apelido ||
-                                        mestreData.nome ||
-                                        "M")[0].toUpperCase()
-                                    : "M"}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Informações do mestre */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                {mestreData.apelido || mestreData.nome ? (
-                                  <h3 className="text-lg font-semibold text-black truncate">
-                                    {mestreData.apelido || mestreData.nome}
-                                  </h3>
-                                ) : null}
-                                <span className="bg-brand text-primary text-xs font-bold px-2 py-1 rounded-full flex-shrink-0">
-                                  Mestre
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-lg bg-gray-100">
-                          <p className="text-sm text-secondary">
-                            Carregando informações do mestre...
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* Lista de Jogadores - Jogador também vê outros jogadores */}
                   <div className="p-4 rounded-lg bg-primary shadow-md">
                     <h3 className="text-lg font-semibold mb-4 text-black">
@@ -949,50 +1554,285 @@ export default function SessionPage() {
                             jogador.apelido || jogador.nome || "Jogador";
                           const isCurrentUser = jogador.usuario_id === user?.id;
 
-                          const statusMap: Record<string, "active" | "pending" | "rejected"> = {
-                            aceito: "active",
-                            pendente: "pending",
-                            recusado: "rejected",
-                          };
-
                           return (
                             <Card
                               key={jogador.usuario_id}
                               className="ficha-card"
                             >
-                              <CardContent>
+                              <CardContent className="p-8">
                                 <div className="flex items-start gap-4">
                                   {/* Foto de perfil */}
                                   <Avatar
                                     src={fotoPerfil}
                                     name={displayName}
-                                    size="md"
+                                    size="lg"
                                   />
 
                                   {/* Informações do jogador */}
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <CardTitle className="text-lg truncate">
-                                        {displayName}
+                                      <CardTitle className="text-xl truncate">
+                                        {isCurrentUser ? "Você" : displayName}
                                       </CardTitle>
                                       {isCurrentUser && (
-                                        <Badge variant="default" className="bg-brand text-primary">
+                                        <Badge
+                                          variant="default"
+                                          className="bg-brand-light text-primary"
+                                        >
                                           Você
                                         </Badge>
                                       )}
+                                      <Badge
+                                        status={
+                                          jogador.status === "aceito"
+                                            ? "active"
+                                            : jogador.status === "pendente"
+                                              ? "inactive" // "pendente" significa que o jogador saiu (inativo)
+                                              : jogador.status === "recusado"
+                                                ? "rejected"
+                                                : "inactive"
+                                        }
+                                      />
                                     </div>
 
                                     {/* Personagem */}
                                     {jogador.ficha ? (
-                                      <div className="mb-2">
-                                        <p className="text-sm text-gray-600 mb-1">
-                                          <span className="font-medium">
-                                            Personagem:
+                                      <div className="mb-2 flex items-center gap-2 flex-wrap">
+                                        <span className="text-base text-gray-600 font-medium">
+                                          Personagem:
+                                        </span>
+                                        <Badge
+                                          style={{
+                                            backgroundColor: getPersonagemColor(
+                                              jogador.ficha.personagem,
+                                              jogador.ficha.id,
+                                              fichaColors
+                                            ),
+                                            color: getPersonagemTextColor(
+                                              jogador.ficha.personagem,
+                                              jogador.ficha.id,
+                                              fichaColors
+                                            ),
+                                          }}
+                                          className="text-base font-semibold"
+                                        >
+                                          {jogador.ficha.personagem ||
+                                            "Sem nome"}
+                                        </Badge>
+                                        {isCurrentUser && jogador.ficha && (
+                                          <span className="relative inline-block">
+                                            <input
+                                              type="color"
+                                              id={`color-picker-${jogador.ficha.id}`}
+                                              style={{
+                                                position: "absolute",
+                                                opacity: 0,
+                                                width: "1px",
+                                                height: "1px",
+                                                pointerEvents: "none",
+                                              }}
+                                              value={(() => {
+                                                const currentColor =
+                                                  fichaColors[
+                                                    jogador.ficha?.id || ""
+                                                  ] ||
+                                                  getPersonagemColor(
+                                                    jogador.ficha?.personagem ||
+                                                      null,
+                                                    jogador.ficha?.id,
+                                                    fichaColors
+                                                  );
+                                                if (
+                                                  currentColor.startsWith(
+                                                    "rgba"
+                                                  )
+                                                ) {
+                                                  const match =
+                                                    currentColor.match(/\d+/g);
+                                                  if (
+                                                    match &&
+                                                    match.length >= 3
+                                                  ) {
+                                                    const r = parseInt(
+                                                      match[0]
+                                                    );
+                                                    const g = parseInt(
+                                                      match[1]
+                                                    );
+                                                    const b = parseInt(
+                                                      match[2]
+                                                    );
+                                                    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+                                                  }
+                                                } else if (
+                                                  currentColor.startsWith(
+                                                    "hsla"
+                                                  )
+                                                ) {
+                                                  const match =
+                                                    currentColor.match(
+                                                      /[\d.]+/g
+                                                    );
+                                                  if (
+                                                    match &&
+                                                    match.length >= 3
+                                                  ) {
+                                                    const h = parseFloat(
+                                                      match[0]
+                                                    );
+                                                    const s =
+                                                      parseFloat(match[1]) /
+                                                      100;
+                                                    const l =
+                                                      parseFloat(match[2]) /
+                                                      100;
+                                                    const c =
+                                                      (1 -
+                                                        Math.abs(2 * l - 1)) *
+                                                      s;
+                                                    const x =
+                                                      c *
+                                                      (1 -
+                                                        Math.abs(
+                                                          ((h / 60) % 2) - 1
+                                                        ));
+                                                    const m = l - c / 2;
+                                                    let r = 0,
+                                                      g = 0,
+                                                      b = 0;
+                                                    if (h < 60) {
+                                                      r = c;
+                                                      g = x;
+                                                      b = 0;
+                                                    } else if (h < 120) {
+                                                      r = x;
+                                                      g = c;
+                                                      b = 0;
+                                                    } else if (h < 180) {
+                                                      r = 0;
+                                                      g = c;
+                                                      b = x;
+                                                    } else if (h < 240) {
+                                                      r = 0;
+                                                      g = x;
+                                                      b = c;
+                                                    } else if (h < 300) {
+                                                      r = x;
+                                                      g = 0;
+                                                      b = c;
+                                                    } else {
+                                                      r = c;
+                                                      g = 0;
+                                                      b = x;
+                                                    }
+                                                    r = Math.round(
+                                                      (r + m) * 255
+                                                    );
+                                                    g = Math.round(
+                                                      (g + m) * 255
+                                                    );
+                                                    b = Math.round(
+                                                      (b + m) * 255
+                                                    );
+                                                    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+                                                  }
+                                                }
+                                                return "#6b7280";
+                                              })()}
+                                              onInput={async (e) => {
+                                                if (!jogador.ficha?.id) return;
+                                                const hex = (
+                                                  e.target as HTMLInputElement
+                                                ).value;
+                                                const r = parseInt(
+                                                  hex.slice(1, 3),
+                                                  16
+                                                );
+                                                const g = parseInt(
+                                                  hex.slice(3, 5),
+                                                  16
+                                                );
+                                                const b = parseInt(
+                                                  hex.slice(5, 7),
+                                                  16
+                                                );
+                                                const newColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
+                                                setFichaColors({
+                                                  ...fichaColors,
+                                                  [jogador.ficha.id]: newColor,
+                                                });
+                                                // Salva no banco de dados
+                                                try {
+                                                  await supabase
+                                                    .from("ficha")
+                                                    .update({
+                                                      badge_color: newColor,
+                                                    })
+                                                    .eq("id", jogador.ficha.id);
+                                                } catch (error) {
+                                                  console.error(
+                                                    "Erro ao salvar cor:",
+                                                    error
+                                                  );
+                                                }
+                                              }}
+                                              onChange={async (e) => {
+                                                if (!jogador.ficha?.id) return;
+                                                const hex = e.target.value;
+                                                const r = parseInt(
+                                                  hex.slice(1, 3),
+                                                  16
+                                                );
+                                                const g = parseInt(
+                                                  hex.slice(3, 5),
+                                                  16
+                                                );
+                                                const b = parseInt(
+                                                  hex.slice(5, 7),
+                                                  16
+                                                );
+                                                const newColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
+                                                setFichaColors({
+                                                  ...fichaColors,
+                                                  [jogador.ficha.id]: newColor,
+                                                });
+                                                // Salva no banco de dados
+                                                try {
+                                                  await supabase
+                                                    .from("ficha")
+                                                    .update({
+                                                      badge_color: newColor,
+                                                    })
+                                                    .eq("id", jogador.ficha.id);
+                                                } catch (error) {
+                                                  console.error(
+                                                    "Erro ao salvar cor:",
+                                                    error
+                                                  );
+                                                }
+                                              }}
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            />
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const colorInput =
+                                                  document.getElementById(
+                                                    `color-picker-${jogador.ficha?.id}`
+                                                  ) as HTMLInputElement;
+                                                if (colorInput) {
+                                                  colorInput.click();
+                                                }
+                                              }}
+                                              className="p-1 rounded hover:bg-gray-100 transition-colors cursor-pointer flex items-center"
+                                              title="Alterar cor"
+                                            >
+                                              <Paintbrush className="w-5 h-5 text-gray-600" />
+                                            </button>
                                           </span>
-                                        </p>
-                                        <p className="text-base font-semibold text-black">
-                                          {jogador.ficha.personagem || "Sem nome"}
-                                        </p>
+                                        )}
                                       </div>
                                     ) : (
                                       <p className="text-sm text-gray-500 italic mb-2">
@@ -1000,17 +1840,14 @@ export default function SessionPage() {
                                       </p>
                                     )}
 
-                                    {/* Status */}
-                                    <div className="flex items-center gap-2 mt-2">
-                                      <Badge
-                                        status={statusMap[jogador.status] || "pending"}
-                                      />
-                                      {jogador.nome && !jogador.apelido && (
+                                    {/* Nome completo (se não tiver apelido) */}
+                                    {jogador.nome && !jogador.apelido && (
+                                      <div className="flex items-center gap-2 mt-2">
                                         <p className="text-xs text-gray-500 truncate">
                                           {jogador.nome}
                                         </p>
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </CardContent>
@@ -1059,9 +1896,25 @@ export default function SessionPage() {
                               </Badge>
                             )}
                             <CardHeader>
-                              <CardTitle className="text-lg">
-                                {ficha.personagem || "Sem nome"}
-                              </CardTitle>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  style={{
+                                    backgroundColor: getPersonagemColor(
+                                      ficha.personagem,
+                                      ficha.id,
+                                      fichaColors
+                                    ),
+                                    color: getPersonagemTextColor(
+                                      ficha.personagem,
+                                      ficha.id,
+                                      fichaColors
+                                    ),
+                                  }}
+                                  className="text-base font-semibold"
+                                >
+                                  {ficha.personagem || "Sem nome"}
+                                </Badge>
+                              </div>
                             </CardHeader>
                             <CardContent>
                               <p className="text-sm text-gray-600 mb-3">

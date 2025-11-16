@@ -48,13 +48,13 @@ export function useSessaoRole(sessaoId: string | undefined): SessaoRole {
           return;
         }
 
-        // Verifica se é jogador da sessão
+        // Verifica se é jogador da sessão (independente do status)
+        // O status será atualizado quando o jogador entrar na sessão
         const { data: sessaoJogador, error: jogadorError } = await supabase
           .from("sessao_jogador")
           .select("status")
           .eq("sessao_id", sessaoId)
           .eq("usuario_id", user.id)
-          .eq("status", "aceito")
           .single();
 
         if (!jogadorError && sessaoJogador) {
