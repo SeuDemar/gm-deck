@@ -226,7 +226,7 @@ export default function DashboardPage() {
         },
         async (payload) => {
           // Verifica se a ficha pertence ao usuário atual
-          const fichaData = payload.new || payload.old;
+          const fichaData = (payload.new || payload.old) as { usuarioId?: string } | null;
           if (fichaData && fichaData.usuarioId === user.id) {
             // Recarrega as fichas quando há mudanças nas fichas do usuário
             try {
