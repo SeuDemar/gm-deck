@@ -1,3 +1,4 @@
+import "../styles/tokens.css";
 import "./globals.css";
 
 export default function RootLayout({
