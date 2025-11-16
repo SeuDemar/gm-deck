@@ -122,7 +122,7 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete, read
               <button
                 disabled={deleting || loading}
                 onClick={handleDeleteFicha}
-                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
               >
                 {deleting ? "Excluindo..." : "Deletar Ficha"}
               </button>
@@ -130,7 +130,7 @@ export default function PdfFichaModal({ isOpen, onClose, fichaId, onDelete, read
             <button
               disabled={loading || deleting}
               onClick={salvarFicha}
-              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
             >
               {loading ? "Salvando..." : "Salvar Ficha"}
             </button>

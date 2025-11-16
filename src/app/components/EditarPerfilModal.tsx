@@ -253,7 +253,7 @@ export default function EditarPerfilModal({
                         setFotoPerfil(null);
                         setFotoPerfilPreview(null);
                       }}
-                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-white text-xs font-bold hover:bg-error-light transition-colors"
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-white text-xs font-bold hover:bg-error-light transition-colors cursor-pointer"
                       disabled={loading}
                     >
                       ×

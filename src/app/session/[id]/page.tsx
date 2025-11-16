@@ -498,86 +498,64 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="flex h-screen min-h-screen overflow-hidden">
+    <div className="flex h-screen min-h-screen overflow-hidden w-full">
       <Sidebar
         onVoltarDashboard={() => router.push("/dashboard")}
+        customActions={
+          !loadingPapel
+            ? [
+                ...(isMestre
+                  ? [
+                      {
+                        label: "Excluir Sessão",
+                        onClick: handleExcluirSessao,
+                        className:
+                          "w-full px-4 py-3 rounded-lg transition-all bg-red-500/20 text-primary hover:bg-red-500/40 hover:shadow-md text-center font-semibold cursor-pointer border border-red-500/30",
+                      },
+                    ]
+                  : []),
+                ...(isJogador
+                  ? [
+                      {
+                        label: "Sair permanentemente",
+                        onClick: handleCortarVinculos,
+                        className:
+                          "w-full px-4 py-3 rounded-lg transition-all bg-red-500/20 text-primary hover:bg-red-500/40 hover:shadow-md text-center font-semibold cursor-pointer border border-red-500/30",
+                      },
+                    ]
+                  : []),
+              ]
+            : undefined
+        }
         customContent={
-          <div className="p-4">
-            {/* Informações da Sessão */}
-            <div className="mb-6">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <h1 className="text-xl font-bold text-primary flex-1">
-                  {sessao?.nome || "Carregando..."}
-                </h1>
-                {isMestre && sessao && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditarSessaoModalOpen(true)}
-                    className="flex-shrink-0 bg-brand-light/30 hover:bg-brand-light/50"
-                    title="Editar sessão"
-                  >
-                    Editar
-                  </Button>
-                )}
+          <div>
+            {/* ID da Sessão com botão de copiar */}
+            <div className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full">
+              <label className="block text-xs font-semibold text-primary opacity-70 mb-1">
+                ID da Sessão
+              </label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs text-primary font-mono break-all bg-brand-light/10 px-2 py-1 rounded">
+                  {sessaoId || "Carregando..."}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopySessionId}
+                  disabled={!sessaoId || copied}
+                  className="bg-brand-light/30 hover:bg-brand-light/50 flex-shrink-0"
+                  title={copied ? "Copiado!" : "Copiar ID"}
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </Button>
               </div>
-              {sessao?.descricao && (
-                <p className="text-sm text-primary opacity-80 mb-4">
-                  {sessao.descricao}
+              {copied && (
+                <p className="text-xs text-primary opacity-60 mt-1">
+                  ID copiado!
                 </p>
               )}
-
-              {/* ID da Sessão com botão de copiar */}
-              <div className="mt-4 p-3 rounded bg-brand-light/20 border border-brand-light/30">
-                <label className="block text-xs font-semibold text-primary opacity-70 mb-1">
-                  ID da Sessão
-                </label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs text-primary font-mono break-all bg-brand-light/10 px-2 py-1 rounded">
-                    {sessaoId || "Carregando..."}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCopySessionId}
-                    disabled={!sessaoId || copied}
-                    className="bg-brand-light/30 hover:bg-brand-light/50"
-                    title={copied ? "Copiado!" : "Copiar ID"}
-                  >
-                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  </Button>
-                </div>
-                {copied && (
-                  <p className="text-xs text-primary opacity-60 mt-1">
-                    ID copiado!
-                  </p>
-                )}
-              </div>
             </div>
 
-            {/* Botões de ação baseados no papel */}
-            {!loadingPapel && (isMestre || isJogador) && (
-              <div className="mb-4 space-y-2">
-                {isMestre && (
-                  <Button
-                    variant="danger"
-                    onClick={handleExcluirSessao}
-                    className="w-full"
-                  >
-                    Excluir Sessão
-                  </Button>
-                )}
-                {isJogador && (
-                  <Button
-                    variant="outline"
-                    onClick={handleCortarVinculos}
-                    className="w-full border-yellow-500 text-yellow-700 hover:bg-yellow-500/20"
-                  >
-                    Sair da Sessão Permanentemente
-                  </Button>
-                )}
-              </div>
-            )}
 
             {/* Informações do Papel */}
             {loadingPapel ? (
@@ -588,23 +566,23 @@ export default function SessionPage() {
               </div>
             ) : isMestre ? (
               <div className="mt-4">
-                <div className="px-4 py-3 rounded bg-brand-light/30 mb-4 text-center">
-                  <p className="text-base font-semibold text-primary">
-                    Você é o Mestre
-                  </p>
+                <div className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full flex items-center justify-center" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'auto', minHeight: '3rem' }}>
+                  <span className="text-base font-semibold text-primary" style={{ lineHeight: '1.5rem' }}>
+                    Você é um mestre !
+                  </span>
                 </div>
               </div>
             ) : isJogador ? (
               <div className="mt-4">
-                <div className="px-4 py-3 rounded bg-brand-light/30 mb-4 text-center">
-                  <p className="text-base font-semibold text-primary">
-                    Você é Jogador
-                  </p>
+                <div className="mb-4 p-3 rounded bg-brand-light/20 border border-brand-light/30 w-full flex items-center justify-center" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'auto', minHeight: '3rem' }}>
+                  <span className="text-base font-semibold text-primary" style={{ lineHeight: '1.5rem' }}>
+                    Você é um jogador !
+                  </span>
                 </div>
               </div>
             ) : (
               <div className="mt-4">
-                <div className="px-3 py-2 rounded bg-red-500/30 mb-4">
+                <div className="px-3 py-2 rounded bg-red-500/30 mb-4 w-full">
                   <p className="text-sm font-semibold text-primary">
                     ⚠️ Você não tem acesso a esta sessão
                   </p>
@@ -616,23 +594,44 @@ export default function SessionPage() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-light">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-light w-full">
         {/* Header com título (mobile) */}
-        <div className="lg:hidden flex items-center justify-between p-4 bg-light border-b border-gray-200">
+        <div className="lg:hidden flex items-center justify-between p-4 bg-light border-b border-gray-200 flex-shrink-0">
           <h1 className="text-lg font-bold text-brand">GM Deck</h1>
           <div className="w-10" /> {/* Spacer para centralizar */}
         </div>
 
         {/* Conteúdo com scroll */}
-        <div className="flex-1 overflow-y-auto px-4 lg:px-6 pt-4 lg:pt-6 pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl lg:text-2xl font-bold text-black">
-              {sessao?.nome || "Sessão"}
-            </h2>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 lg:px-6 pt-4 lg:pt-6 pb-6 w-full">
+          {/* Cabeçalho com nome da campanha e descrição */}
+          <div className="mb-6">
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl lg:text-3xl font-bold text-black mb-2 break-words">
+                  {sessao?.nome || "Sessão"}
+                </h1>
+                {sessao?.descricao && (
+                  <p className="text-sm lg:text-base text-gray-700 break-words">
+                    {sessao.descricao}
+                  </p>
+                )}
+              </div>
+              {isMestre && sessao && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditarSessaoModalOpen(true)}
+                  className="flex-shrink-0 bg-brand-light/30 hover:bg-brand-light/50"
+                  title="Editar sessão"
+                >
+                  Editar
+                </Button>
+              )}
+            </div>
 
             {/* Badge de Papel */}
             {!loadingPapel && (
-              <div>
+              <div className="flex items-center gap-2">
                 {isMestre && (
                   <Badge variant="default" className="bg-brand text-primary">
                     Mestre
@@ -672,16 +671,6 @@ export default function SessionPage() {
               {/* Conteúdo específico para Mestre */}
               {isMestre && (
                 <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-primary shadow-md text-center">
-                    <h3 className="text-lg font-semibold mb-2 text-black">
-                      Área do Mestre
-                    </h3>
-                    <p className="text-gray-700 text-sm">
-                      Como mestre, você pode gerenciar jogadores, visualizar
-                      todas as fichas e controlar a sessão.
-                    </p>
-                  </div>
-
                   {/* Estatísticas da Sessão */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <Card>
@@ -872,20 +861,6 @@ export default function SessionPage() {
               {/* Conteúdo específico para Jogador */}
               {isJogador && (
                 <div className="space-y-4">
-                  <div className="p-4 rounded-lg bg-primary shadow-md">
-                    <h3 className="text-lg font-semibold mb-2 text-black">
-                      Área do Jogador
-                    </h3>
-                    <p className="text-black text-sm opacity-80">
-                      Selecione uma de suas fichas para usar nesta sessão. Você
-                      pode editar suas fichas clicando nelas.
-                    </p>
-                    {fichaSelecionadaId && (
-                      <p className="text-sm text-green-600 mt-2 font-medium">
-                        ✓ Ficha selecionada para esta sessão
-                      </p>
-                    )}
-                  </div>
 
                   {/* Card do Mestre - Separado dos jogadores */}
                   {isJogador && (

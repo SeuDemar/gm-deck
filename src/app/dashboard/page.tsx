@@ -6,14 +6,14 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
-import { getFotoPerfilUrl } from "../../../lib/storageUtils";
 import PdfFichaModal from "../components/PdfFichaModal";
 import CriarSessaoModal from "../components/CriarSessaoModal";
 import EntrarSessaoModal from "../components/EntrarSessaoModal";
 import EditarPerfilModal from "../components/EditarPerfilModal";
+import Sidebar from "../components/Sidebar";
 import { useSupabasePdf } from "../../hooks/useSupabasePdf";
 import { useSupabaseSessao, Sessao } from "../../hooks/useSupabaseSessao";
-import { Card, CardHeader, CardTitle, CardContent, Badge, Loading, EmptyState, Avatar } from "@/components/ui";
+import { Card, CardHeader, CardTitle, CardContent, Badge, Loading, EmptyState } from "@/components/ui";
 
 type FichaListItem = {
   id: string;
@@ -43,8 +43,6 @@ export default function DashboardPage() {
   const [sessoes, setSessoes] = useState<Sessao[]>([]);
   const [loadingSessoes, setLoadingSessoes] = useState(false);
   const [activeTab, setActiveTab] = useState<"fichas" | "sessoes">("fichas");
-  const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -72,37 +70,7 @@ export default function DashboardPage() {
     return () => subscription.unsubscribe();
   }, [router]);
 
-  // Carrega a foto de perfil do bucket
-  useEffect(() => {
-    async function loadFotoPerfil() {
-      if (!user?.id) {
-        setFotoPerfilUrl(null);
-        return;
-      }
-
-      console.log("🔍 Carregando foto de perfil para usuário:", user.id);
-      try {
-        const url = await getFotoPerfilUrl(
-          user.id,
-          user.user_metadata?.foto_perfil_url
-        );
-        console.log("✅ URL da foto obtida:", url);
-        if (url) {
-          setFotoPerfilUrl(url);
-        } else {
-          console.log("⚠️ Nenhuma foto encontrada no bucket");
-          setFotoPerfilUrl(null);
-        }
-      } catch (error) {
-        console.error("❌ Erro ao carregar foto de perfil:", error);
-        setFotoPerfilUrl(null);
-      }
-    }
-
-    if (user?.id) {
-      loadFotoPerfil();
-    }
-  }, [user?.id]); // Re-executa apenas quando o ID do usuário mudar
+ // Re-executa apenas quando o ID do usuário mudar
 
   // Carrega as fichas do usuário quando ele estiver logado
   useEffect(() => {
@@ -266,16 +234,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function handleLogout() {
-    try {
-      await supabase.auth.signOut();
-      // O redirecionamento será feito automaticamente pelo onAuthStateChange
-    } catch (error) {
-      console.error("Erro ao fazer logout:", error);
-      // Força o redirecionamento mesmo se houver erro
-      router.push("/login");
-    }
-  }
 
   if (loading) {
     return (
@@ -287,136 +245,17 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen min-h-screen overflow-hidden">
-      {/* Overlay para mobile */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`
-          fixed lg:static
-          top-0 left-0
-          w-64 h-full
-          flex flex-col justify-between
-          bg-brand text-primary
-          z-50
-          transform transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-          shadow-lg lg:shadow-none
-        `}
-      >
-        <div className="flex flex-col h-full overflow-y-auto">
-          {/* Header com botão de fechar (mobile) */}
-          <div className="flex items-center justify-between p-4 border-b border-brand-light/20 lg:hidden">
-            <h2 className="text-lg font-bold text-primary">Menu</h2>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-2 rounded hover:bg-brand-light transition-colors"
-              aria-label="Fechar menu"
-            >
-              <svg
-                className="w-6 h-6 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <div className="flex-1 flex flex-col p-4 lg:p-6">
-            {/* Avatar e nome */}
-            <div className="flex flex-col items-center mb-6 lg:mb-8">
-              <Avatar
-                src={fotoPerfilUrl}
-                name={user?.user_metadata?.full_name || user?.email || "Usuário"}
-                size="lg"
-                className="mb-3"
-              />
-              <p className="text-center font-semibold text-primary text-sm lg:text-base break-words max-w-full px-2">
-                {user?.user_metadata?.full_name || user?.email || "Usuário"}
-              </p>
-            </div>
-
-            {/* Navegação */}
-            <nav className="flex flex-col gap-2 flex-1">
-              <button
-                onClick={() => {
-                  setIsCriarSessaoModalOpen(true);
-                  setSidebarOpen(false);
-                }}
-                className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium"
-              >
-                Criar Sessão
-              </button>
-              <button
-                onClick={() => {
-                  setIsEntrarSessaoModalOpen(true);
-                  setSidebarOpen(false);
-                }}
-                className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium"
-              >
-                Entrar em Sessão
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditarPerfilModalOpen(true);
-                  setSidebarOpen(false);
-                }}
-                className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium"
-              >
-                Editar Perfil
-              </button>
-            </nav>
-          </div>
-
-          {/* Logout */}
-          <div className="p-4 lg:p-6 border-t border-brand-light/20">
-            <button
-              onClick={handleLogout}
-              className="w-full px-4 py-3 rounded-lg transition-all font-semibold bg-brand-accent text-primary hover:bg-brand-salmon hover:shadow-md"
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </aside>
+      <Sidebar
+        onCriarSessao={() => setIsCriarSessaoModalOpen(true)}
+        onEntrarSessao={() => setIsEntrarSessaoModalOpen(true)}
+        onEditarPerfil={() => setIsEditarPerfilModalOpen(true)}
+      />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-light">
         {/* Header com botão de menu (mobile) */}
         <div className="lg:hidden flex items-center justify-between p-4 bg-light border-b border-gray-200">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded hover:bg-gray-100 transition-colors"
-            aria-label="Abrir menu"
-          >
-            <svg
-              className="w-6 h-6 text-brand"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
-          <h1 className="text-lg font-bold text-brand">GM Deck</h1>
-          <div className="w-10" /> {/* Spacer para centralizar */}
+          <h1 className="text-lg font-bold text-brand mx-auto">GM Deck</h1>
         </div>
 
         {/* Conteúdo com scroll */}
@@ -426,7 +265,7 @@ export default function DashboardPage() {
             <div className="flex gap-4">
               <button
                 onClick={() => setActiveTab("fichas")}
-                className={`px-4 py-2 font-semibold transition-colors ${
+                className={`px-4 py-2 font-semibold transition-colors cursor-pointer ${
                   activeTab === "fichas"
                     ? "text-black border-b-2 border-brand"
                     : "text-secondary hover:text-black"
@@ -436,7 +275,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => setActiveTab("sessoes")}
-                className={`px-4 py-2 font-semibold transition-colors ${
+                className={`px-4 py-2 font-semibold transition-colors cursor-pointer ${
                   activeTab === "sessoes"
                     ? "text-black border-b-2 border-brand"
                     : "text-secondary hover:text-black"
@@ -468,7 +307,7 @@ export default function DashboardPage() {
                             description='Clique no botão "+" para criar uma nova ficha.'
                             action={
                               <button
-                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
                                 onClick={handleOpenNewFicha}
                               >
                                 <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
@@ -505,7 +344,7 @@ export default function DashboardPage() {
                         ))}
                         {/* Botão de adicionar nova ficha */}
                         <button
-                          className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                          className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
                           onClick={handleOpenNewFicha}
                         >
                           <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
@@ -537,7 +376,7 @@ export default function DashboardPage() {
                             description='Clique no botão "+" para criar uma nova sessão.'
                             action={
                               <button
-                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
                                 onClick={() => setIsCriarSessaoModalOpen(true)}
                               >
                                 <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
@@ -613,7 +452,7 @@ export default function DashboardPage() {
                         })}
                         {/* Botão de criar nova sessão */}
                         <button
-                          className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                          className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
                           onClick={() => setIsCriarSessaoModalOpen(true)}
                         >
                           <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
@@ -664,16 +503,6 @@ export default function DashboardPage() {
             } = await supabase.auth.getUser();
             if (updatedUser) {
               setUser(updatedUser);
-              // Recarrega a foto de perfil do bucket
-              try {
-                const url = await getFotoPerfilUrl(
-                  updatedUser.id,
-                  updatedUser.user_metadata?.foto_perfil_url
-                );
-                setFotoPerfilUrl(url);
-              } catch (error) {
-                console.error("Erro ao recarregar foto de perfil:", error);
-              }
             }
           }}
         />

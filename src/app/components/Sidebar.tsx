@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Menu } from "lucide-react";
+import { X, Menu, LogOut } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 import { getFotoPerfilUrl } from "../../../lib/storageUtils";
 import { Avatar, Button } from "@/components/ui";
@@ -118,7 +118,7 @@ export default function Sidebar({
         className={`
           fixed lg:static
           top-0 left-0
-          w-64 h-full
+          w-72 sm:w-80 lg:w-64 h-full
           flex flex-col justify-between
           bg-brand text-primary
           z-50
@@ -144,13 +144,24 @@ export default function Sidebar({
 
           <div className="flex-1 flex flex-col p-4 lg:p-6">
             {/* Avatar e nome */}
-            <div className="flex flex-col items-center mb-6 lg:mb-8">
+            <div className="flex flex-col items-center mb-6 lg:mb-8 relative">
               <Avatar
                 src={fotoPerfilUrl}
                 name={user?.user_metadata?.full_name || user?.email || "Usuário"}
                 size="lg"
                 className="mb-3"
               />
+              {/* Botão de logout próximo ao avatar - apenas no dashboard */}
+              {!onVoltarDashboard && (
+                <button
+                  onClick={handleLogout}
+                  className="absolute top-0 right-0 p-2 rounded-full bg-brand-light/30 hover:bg-brand-light/50 text-primary transition-all hover:shadow-md cursor-pointer"
+                  title="Sair"
+                  aria-label="Sair"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
               <p className="text-center font-semibold text-primary text-sm lg:text-base break-words max-w-full px-2">
                 {user?.user_metadata?.full_name || user?.email || "Usuário"}
               </p>
@@ -158,7 +169,7 @@ export default function Sidebar({
 
             {/* Conteúdo customizado */}
             {customContent && (
-              <div className="mb-4">
+              <div className="mb-4 w-full">
                 {customContent}
               </div>
             )}
@@ -166,64 +177,52 @@ export default function Sidebar({
             {/* Navegação */}
             <nav className="flex flex-col gap-2 flex-1">
               {onVoltarDashboard && (
-                <Button
-                  variant="ghost"
+                <button
                   onClick={() => handleActionClick(() => router.push("/dashboard"))}
-                  className="w-full justify-start"
+                  className="w-full px-4 py-3 rounded-lg transition-all bg-brand-light/20 text-primary hover:bg-brand-light/40 hover:shadow-md text-center font-semibold cursor-pointer border border-brand-light/30"
                 >
                   Voltar ao Dashboard
-                </Button>
+                </button>
               )}
               {onCriarSessao && (
-                <Button
-                  variant="ghost"
+                <button
                   onClick={() => handleActionClick(onCriarSessao)}
-                  className="w-full justify-start"
+                  className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium cursor-pointer"
                 >
                   Criar Sessão
-                </Button>
+                </button>
               )}
               {onEntrarSessao && (
-                <Button
-                  variant="ghost"
+                <button
                   onClick={() => handleActionClick(onEntrarSessao)}
-                  className="w-full justify-start"
+                  className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium cursor-pointer"
                 >
                   Entrar em Sessão
-                </Button>
+                </button>
               )}
               {onEditarPerfil && (
-                <Button
-                  variant="ghost"
+                <button
                   onClick={() => handleActionClick(onEditarPerfil)}
-                  className="w-full justify-start"
+                  className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium cursor-pointer"
                 >
                   Editar Perfil
-                </Button>
+                </button>
               )}
               {customActions?.map((action, index) => (
-                <Button
+                <button
                   key={index}
-                  variant="ghost"
                   onClick={() => handleActionClick(action.onClick)}
-                  className={action.className || "w-full justify-start"}
+                  className={
+                    action.className ||
+                    "w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium cursor-pointer"
+                  }
                 >
                   {action.label}
-                </Button>
+                </button>
               ))}
             </nav>
           </div>
 
-          {/* Logout */}
-          <div className="p-4 lg:p-6 border-t border-brand-light/20">
-            <Button
-              variant="primary"
-              onClick={handleLogout}
-              className="w-full bg-brand-accent hover:bg-brand-salmon"
-            >
-              Sair
-            </Button>
-          </div>
         </div>
       </aside>
 
