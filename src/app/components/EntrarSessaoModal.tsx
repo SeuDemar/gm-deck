@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Modal from "./Modal";
+import { Button, Input } from "@/components/ui";
 
 interface EntrarSessaoModalProps {
   isOpen: boolean;
@@ -45,43 +46,35 @@ export default function EntrarSessaoModal({
         <h2 className="text-2xl font-bold mb-6 text-black">Entrar em uma Sessão</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 flex-1">
-          <div>
-            <label
-              htmlFor="sessaoId"
-              className="block text-sm font-medium mb-2 text-black"
-            >
-              ID ou Código da Sessão *
-            </label>
-            <input
-              id="sessaoId"
-              type="text"
-              value={sessaoId}
-              onChange={(e) => setSessaoId(e.target.value)}
-              placeholder="Cole aqui o ID ou código da sessão"
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black"
-              disabled={loading}
-            />
-            <p className="mt-2 text-sm text-gray-600">
-              Peça ao mestre da sessão o ID ou código para entrar.
-            </p>
-          </div>
+          <Input
+            label="ID ou Código da Sessão"
+            id="sessaoId"
+            type="text"
+            value={sessaoId}
+            onChange={(e) => setSessaoId(e.target.value)}
+            placeholder="Cole aqui o ID ou código da sessão"
+            required
+            disabled={loading}
+            helperText="Peça ao mestre da sessão o ID ou código para entrar."
+          />
 
           <div className="flex gap-3 mt-auto">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={onClose}
-              className="px-6 py-2 rounded bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
               disabled={loading}
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="px-6 py-2 rounded bg-brand text-primary hover:bg-brand-light transition-colors disabled:opacity-50"
+              variant="primary"
+              isLoading={loading}
               disabled={loading}
             >
-              {loading ? "Entrando..." : "Entrar na Sessão"}
-            </button>
+              Entrar na Sessão
+            </Button>
           </div>
         </form>
       </div>

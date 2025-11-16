@@ -4,14 +4,16 @@ import "../globals.css";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
-import { getFotoPerfilUrl, getSignedUrl } from "../../../lib/storageUtils";
+import { getFotoPerfilUrl } from "../../../lib/storageUtils";
 import PdfFichaModal from "../components/PdfFichaModal";
 import CriarSessaoModal from "../components/CriarSessaoModal";
 import EntrarSessaoModal from "../components/EntrarSessaoModal";
 import EditarPerfilModal from "../components/EditarPerfilModal";
 import { useSupabasePdf } from "../../hooks/useSupabasePdf";
 import { useSupabaseSessao, Sessao } from "../../hooks/useSupabaseSessao";
+import { Card, CardHeader, CardTitle, CardContent, Badge, Loading, EmptyState, Avatar } from "@/components/ui";
 
 type FichaListItem = {
   id: string;
@@ -23,7 +25,8 @@ type FichaListItem = {
 export default function DashboardPage() {
   const router = useRouter();
   const { getUserFichas } = useSupabasePdf();
-  const { criarSessao, entrarSessao, getSessoesMestre, getSessoesJogador } = useSupabaseSessao();
+  const { criarSessao, entrarSessao, getSessoesMestre, getSessoesJogador } =
+    useSupabaseSessao();
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null
   );
@@ -32,13 +35,16 @@ export default function DashboardPage() {
   const [isCriarSessaoModalOpen, setIsCriarSessaoModalOpen] = useState(false);
   const [isEntrarSessaoModalOpen, setIsEntrarSessaoModalOpen] = useState(false);
   const [isEditarPerfilModalOpen, setIsEditarPerfilModalOpen] = useState(false);
-  const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(undefined);
+  const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(
+    undefined
+  );
   const [fichas, setFichas] = useState<FichaListItem[]>([]);
   const [loadingFichas, setLoadingFichas] = useState(false);
   const [sessoes, setSessoes] = useState<Sessao[]>([]);
   const [loadingSessoes, setLoadingSessoes] = useState(false);
   const [activeTab, setActiveTab] = useState<"fichas" | "sessoes">("fichas");
   const [fotoPerfilUrl, setFotoPerfilUrl] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Verifica a sessão atual
@@ -76,7 +82,10 @@ export default function DashboardPage() {
 
       console.log("🔍 Carregando foto de perfil para usuário:", user.id);
       try {
-        const url = await getFotoPerfilUrl(user.id, user.user_metadata?.foto_perfil_url);
+        const url = await getFotoPerfilUrl(
+          user.id,
+          user.user_metadata?.foto_perfil_url
+        );
         console.log("✅ URL da foto obtida:", url);
         if (url) {
           setFotoPerfilUrl(url);
@@ -99,7 +108,7 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadFichas() {
       if (!user) return;
-      
+
       try {
         setLoadingFichas(true);
         const fichasData = await getUserFichas();
@@ -119,26 +128,28 @@ export default function DashboardPage() {
   useEffect(() => {
     async function loadSessoes() {
       if (!user) return;
-      
+
       try {
         setLoadingSessoes(true);
         // Busca sessões como mestre e como jogador
         const [sessoesMestre, sessoesJogador] = await Promise.all([
           getSessoesMestre(),
-          getSessoesJogador()
+          getSessoesJogador(),
         ]);
-        
+
         // Combina as sessões e remove duplicatas (caso o usuário seja mestre e jogador)
         const todasSessoes = [...sessoesMestre, ...sessoesJogador];
-        const sessoesUnicas = todasSessoes.filter((sessao, index, self) =>
-          index === self.findIndex((s) => s.id === sessao.id)
+        const sessoesUnicas = todasSessoes.filter(
+          (sessao, index, self) =>
+            index === self.findIndex((s) => s.id === sessao.id)
         );
-        
+
         // Ordena por data de criação (mais recente primeiro)
-        sessoesUnicas.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        sessoesUnicas.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
-        
+
         setSessoes(sessoesUnicas);
       } catch (error) {
         console.error("Erro ao carregar sessões:", error);
@@ -186,14 +197,16 @@ export default function DashboardPage() {
       try {
         const [sessoesMestre, sessoesJogador] = await Promise.all([
           getSessoesMestre(),
-          getSessoesJogador()
+          getSessoesJogador(),
         ]);
         const todasSessoes = [...sessoesMestre, ...sessoesJogador];
-        const sessoesUnicas = todasSessoes.filter((sessao, index, self) =>
-          index === self.findIndex((s) => s.id === sessao.id)
+        const sessoesUnicas = todasSessoes.filter(
+          (sessao, index, self) =>
+            index === self.findIndex((s) => s.id === sessao.id)
         );
-        sessoesUnicas.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        sessoesUnicas.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         setSessoes(sessoesUnicas);
       } catch (error) {
@@ -202,7 +215,8 @@ export default function DashboardPage() {
       router.push(`/session/${sessao.id}`);
     } catch (error: unknown) {
       console.error("Erro ao criar sessão:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro desconhecido";
       alert("Erro ao criar sessão: " + errorMessage);
     }
   }
@@ -214,14 +228,16 @@ export default function DashboardPage() {
       try {
         const [sessoesMestre, sessoesJogador] = await Promise.all([
           getSessoesMestre(),
-          getSessoesJogador()
+          getSessoesJogador(),
         ]);
         const todasSessoes = [...sessoesMestre, ...sessoesJogador];
-        const sessoesUnicas = todasSessoes.filter((sessao, index, self) =>
-          index === self.findIndex((s) => s.id === sessao.id)
+        const sessoesUnicas = todasSessoes.filter(
+          (sessao, index, self) =>
+            index === self.findIndex((s) => s.id === sessao.id)
         );
-        sessoesUnicas.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        sessoesUnicas.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         setSessoes(sessoesUnicas);
       } catch (error) {
@@ -230,7 +246,8 @@ export default function DashboardPage() {
       router.push(`/session/${sessaoId}`);
     } catch (error: unknown) {
       console.error("Erro ao entrar na sessão:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro desconhecido";
       alert("Erro ao entrar na sessão: " + errorMessage);
     }
   }
@@ -263,316 +280,354 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-light">
-        <span className="text-lg animate-pulse text-secondary">
-          Carregando...
-        </span>
+        <Loading message="Carregando..." />
       </div>
     );
   }
 
-  const getInitialAvatar = (name: string) => name.charAt(0).toUpperCase();
-
   return (
-    <div className="flex h-screen min-h-screen">
+    <div className="flex h-screen min-h-screen overflow-hidden">
+      {/* Overlay para mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 flex flex-col justify-between bg-brand text-primary">
-        <div className="p-4">
-          {/* Avatar e nome */}
-          <div className="flex flex-col items-center mb-8">
-            {fotoPerfilUrl ? (
-              <img
-                src={fotoPerfilUrl}
-                alt="Foto de perfil"
-                className="w-16 h-16 rounded-full object-cover border-2 border-primary"
-                crossOrigin="anonymous"
-                onError={(e) => {
-                  // Se a imagem falhar ao carregar, tenta usar signed URL
-                  console.error("Erro ao carregar foto de perfil com URL pública:", fotoPerfilUrl);
-                  const img = e.target as HTMLImageElement;
-                  // Tenta usar signed URL como fallback
-                  if (user?.id) {
-                    getSignedUrl(user.id, fotoPerfilUrl).then((signedUrl) => {
-                      if (signedUrl) {
-                        img.src = signedUrl;
-                        console.log("Tentando carregar com signed URL:", signedUrl);
-                      } else {
-                        img.style.display = "none";
-                        setFotoPerfilUrl(null);
-                      }
-                    }).catch(() => {
-                      img.style.display = "none";
-                      setFotoPerfilUrl(null);
-                    });
-                  } else {
-                    img.style.display = "none";
-                    setFotoPerfilUrl(null);
-                  }
-                }}
-                onLoad={() => {
-                  console.log("✅ Foto de perfil carregada com sucesso!");
-                }}
-              />
-            ) : null}
-            {!fotoPerfilUrl && (
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold bg-primary text-brand">
-              {user?.user_metadata?.full_name
-                ? getInitialAvatar(user.user_metadata.full_name)
-                : "?"}
-            </div>
-            )}
-            <p className="mt-2 text-center font-semibold text-primary">
-              {user?.user_metadata?.full_name || user?.email || "Usuário"}
-            </p>
+      <aside
+        className={`
+          fixed lg:static
+          top-0 left-0
+          w-64 h-full
+          flex flex-col justify-between
+          bg-brand text-primary
+          z-50
+          transform transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          shadow-lg lg:shadow-none
+        `}
+      >
+        <div className="flex flex-col h-full overflow-y-auto">
+          {/* Header com botão de fechar (mobile) */}
+          <div className="flex items-center justify-between p-4 border-b border-brand-light/20 lg:hidden">
+            <h2 className="text-lg font-bold text-primary">Menu</h2>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="p-2 rounded hover:bg-brand-light transition-colors"
+              aria-label="Fechar menu"
+            >
+              <svg
+                className="w-6 h-6 text-primary"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
           </div>
 
-          {/* Navegação */}
-          <nav className="flex flex-col gap-2">
-            <button
-              onClick={() => setIsCriarSessaoModalOpen(true)}
-              className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light"
-            >
-              Criar Sessão
-            </button>
-            <button
-              onClick={() => setIsEntrarSessaoModalOpen(true)}
-              className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light"
-            >
-              Entrar em Sessão
-            </button>
-            <button
-              onClick={() => setIsEditarPerfilModalOpen(true)}
-              className="px-4 py-2 rounded transition-colors bg-transparent text-primary hover:bg-brand-light"
-            >
-              Editar Perfil
-            </button>
-          </nav>
-        </div>
+          <div className="flex-1 flex flex-col p-4 lg:p-6">
+            {/* Avatar e nome */}
+            <div className="flex flex-col items-center mb-6 lg:mb-8">
+              <Avatar
+                src={fotoPerfilUrl}
+                name={user?.user_metadata?.full_name || user?.email || "Usuário"}
+                size="lg"
+                className="mb-3"
+              />
+              <p className="text-center font-semibold text-primary text-sm lg:text-base break-words max-w-full px-2">
+                {user?.user_metadata?.full_name || user?.email || "Usuário"}
+              </p>
+            </div>
 
-        {/* Logout */}
-        <div className="p-4">
-          <button
-            onClick={handleLogout}
-            className="w-full px-4 py-2 rounded transition-colors font-semibold bg-brand-accent text-primary hover:bg-brand-salmon"
-          >
-            Sair
-          </button>
+            {/* Navegação */}
+            <nav className="flex flex-col gap-2 flex-1">
+              <button
+                onClick={() => {
+                  setIsCriarSessaoModalOpen(true);
+                  setSidebarOpen(false);
+                }}
+                className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium"
+              >
+                Criar Sessão
+              </button>
+              <button
+                onClick={() => {
+                  setIsEntrarSessaoModalOpen(true);
+                  setSidebarOpen(false);
+                }}
+                className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium"
+              >
+                Entrar em Sessão
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditarPerfilModalOpen(true);
+                  setSidebarOpen(false);
+                }}
+                className="w-full px-4 py-3 rounded-lg transition-all bg-transparent text-primary hover:bg-brand-light hover:shadow-md text-left font-medium"
+              >
+                Editar Perfil
+              </button>
+            </nav>
+          </div>
+
+          {/* Logout */}
+          <div className="p-4 lg:p-6 border-t border-brand-light/20">
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-3 rounded-lg transition-all font-semibold bg-brand-accent text-primary hover:bg-brand-salmon hover:shadow-md"
+            >
+              Sair
+            </button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 pr-6 pt-6 pb-6 pl-0 overflow-y-auto bg-light">
-        {/* Tabs para alternar entre Fichas e Sessões */}
-        <div className="mb-6 border-b border-gray-200">
-          <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab("fichas")}
-              className={`px-4 py-2 font-semibold transition-colors ${
-                activeTab === "fichas"
-                  ? "text-black border-b-2 border-brand"
-                  : "text-secondary hover:text-black"
-              }`}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-light">
+        {/* Header com botão de menu (mobile) */}
+        <div className="lg:hidden flex items-center justify-between p-4 bg-light border-b border-gray-200">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded hover:bg-gray-100 transition-colors"
+            aria-label="Abrir menu"
+          >
+            <svg
+              className="w-6 h-6 text-brand"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              Minhas Fichas
-            </button>
-            <button
-              onClick={() => setActiveTab("sessoes")}
-              className={`px-4 py-2 font-semibold transition-colors ${
-                activeTab === "sessoes"
-                  ? "text-black border-b-2 border-brand"
-                  : "text-secondary hover:text-black"
-              }`}
-            >
-              Minhas Sessões
-            </button>
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
+          <h1 className="text-lg font-bold text-brand">GM Deck</h1>
+          <div className="w-10" /> {/* Spacer para centralizar */}
         </div>
 
-        {/* Título e conteúdo */}
-        <div className="pl-0">
-          {activeTab === "fichas" ? (
-            <>
-              <h2 className="text-2xl font-bold mb-4 text-black pl-0">
+        {/* Conteúdo com scroll */}
+        <div className="flex-1 overflow-y-auto px-4 lg:px-6 pt-4 lg:pt-6 pb-6">
+          {/* Tabs para alternar entre Fichas e Sessões */}
+          <div className="mb-6 border-b border-gray-200">
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActiveTab("fichas")}
+                className={`px-4 py-2 font-semibold transition-colors ${
+                  activeTab === "fichas"
+                    ? "text-black border-b-2 border-brand"
+                    : "text-secondary hover:text-black"
+                }`}
+              >
                 Minhas Fichas
-              </h2>
-
-          {loadingFichas ? (
-            <div className="flex items-center justify-center p-8">
-              <span className="text-lg animate-pulse text-secondary">
-                Carregando fichas...
-              </span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-0">
-              {/* Lista de fichas */}
-              {fichas.length === 0 ? (
-                <>
-                  <div className="col-span-full p-8 text-center">
-                    <p className="text-secondary">
-                      Nenhuma ficha encontrada. Clique no botão &quot;+&quot; para criar uma nova.
-                    </p>
-                  </div>
-                  {/* Botão de adicionar nova ficha */}
-                  <button
-                    className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
-                    onClick={handleOpenNewFicha}
-                  >
-                    <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
-                      +
-                    </div>
-                    <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
-                      Nova Ficha
-                    </p>
-                  </button>
-                </>
-              ) : (
-                <>
-                  {fichas.map((ficha) => (
-                    <div
-                      key={ficha.id}
-                      className="ficha-card"
-                      onClick={() => handleOpenEditFicha(ficha.id)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-semibold">
-                          {ficha.personagem || "Sem nome"}
-                        </h3>
-                      </div>
-                      <p className="text-sm">
-                        Criada em:{" "}
-                        {new Date(ficha.created_at).toLocaleDateString("pt-BR")}
-                      </p>
-                    </div>
-                  ))}
-                  {/* Botão de adicionar nova ficha */}
-                  <button
-                    className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
-                    onClick={handleOpenNewFicha}
-                  >
-                    <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
-                      +
-                    </div>
-                    <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
-                      Nova Ficha
-                    </p>
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-            </>
-          ) : (
-            <>
-              <h2 className="text-2xl font-bold mb-4 text-black pl-0">
+              </button>
+              <button
+                onClick={() => setActiveTab("sessoes")}
+                className={`px-4 py-2 font-semibold transition-colors ${
+                  activeTab === "sessoes"
+                    ? "text-black border-b-2 border-brand"
+                    : "text-secondary hover:text-black"
+                }`}
+              >
                 Minhas Sessões
-              </h2>
+              </button>
+            </div>
+          </div>
 
-              {loadingSessoes ? (
-                <div className="flex items-center justify-center p-8">
-                  <span className="text-lg animate-pulse text-secondary">
-                    Carregando sessões...
-                  </span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-0">
-                  {/* Lista de sessões */}
-                  {sessoes.length === 0 ? (
-                    <>
-                      <div className="col-span-full p-8 text-center">
-                        <p className="text-secondary">
-                          Nenhuma sessão encontrada. Clique no botão &quot;+&quot; para criar uma nova.
-                        </p>
-                      </div>
-                      {/* Botão de criar nova sessão */}
-                      <button
-                        className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
-                        onClick={() => setIsCriarSessaoModalOpen(true)}
-                      >
-                        <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
-                          +
-                        </div>
-                        <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
-                          Nova Sessão
-                        </p>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {sessoes.map((sessao) => {
-                        const isMestre = sessao.mestre_id === user?.id;
-                        return (
-                          <div
-                            key={sessao.id}
-                            className={`ficha-card relative ${
-                              isMestre
-                                ? "ring-2 ring-brand bg-brand/5 border-brand/30"
-                                : ""
-                            }`}
-                            onClick={() => handleOpenSessao(sessao.id)}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h3 className={`text-lg font-semibold ${isMestre ? "text-brand" : ""}`}>
-                                    {sessao.nome}
-                                  </h3>
-                                  {isMestre && (
-                                    <span className="bg-brand text-primary text-xs font-bold px-2 py-1 rounded-full">
-                                      Mestre
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              {/* Badge de status */}
-                              <span
-                                className={`text-xs px-2 py-1 rounded ${
-                                  sessao.status === "ativa"
-                                    ? "bg-green-500/20 text-green-700"
-                                    : sessao.status === "pausada"
-                                    ? "bg-yellow-500/20 text-yellow-700"
-                                    : "bg-gray-500/20 text-gray-700"
-                                }`}
+          {/* Título e conteúdo */}
+          <div>
+            {activeTab === "fichas" ? (
+              <>
+                <h2 className="text-xl lg:text-2xl font-bold mb-4 lg:mb-6 text-black">
+                  Minhas Fichas
+                </h2>
+
+                {loadingFichas ? (
+                  <Loading message="Carregando fichas..." />
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+                    {/* Lista de fichas */}
+                    {fichas.length === 0 ? (
+                      <>
+                        <div className="col-span-full">
+                          <EmptyState
+                            title="Nenhuma ficha encontrada"
+                            description='Clique no botão "+" para criar uma nova ficha.'
+                            action={
+                              <button
+                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                                onClick={handleOpenNewFicha}
                               >
-                                {sessao.status === "ativa"
-                                  ? "Ativa"
-                                  : sessao.status === "pausada"
-                                  ? "Pausada"
-                                  : "Encerrada"}
-                              </span>
-                            </div>
-                            {sessao.descricao && (
-                              <p className="text-sm text-secondary mb-2 line-clamp-2">
-                                {sessao.descricao}
-                              </p>
-                            )}
-                            <div className="flex items-center justify-between mt-2">
-                              <p className="text-xs text-secondary">
-                                {sessao.ficha_ids?.length || 0} fichas
-                              </p>
-                              <p className="text-xs text-secondary">
-                                {new Date(sessao.created_at).toLocaleDateString("pt-BR")}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {/* Botão de criar nova sessão */}
-        <button
-                        className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
-                        onClick={() => setIsCriarSessaoModalOpen(true)}
-                      >
-                        <div className="text-4xl font-bold text-brand group-hover:text-brand-light transition-colors mb-2">
-                          +
+                                <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
+                                <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                                  Nova Ficha
+                                </p>
+                              </button>
+                            }
+                          />
                         </div>
-                        <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
-                          Nova Sessão
-                        </p>
-        </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </>
-          )}
+                      </>
+                    ) : (
+                      <>
+                        {fichas.map((ficha) => (
+                          <Card
+                            key={ficha.id}
+                            className="ficha-card cursor-pointer"
+                            onClick={() => handleOpenEditFicha(ficha.id)}
+                          >
+                            <CardHeader>
+                              <CardTitle className="text-lg">
+                                {ficha.personagem || "Sem nome"}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <p className="text-sm text-gray-600">
+                                Criada em:{" "}
+                                {new Date(ficha.created_at).toLocaleDateString(
+                                  "pt-BR"
+                                )}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        ))}
+                        {/* Botão de adicionar nova ficha */}
+                        <button
+                          className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                          onClick={handleOpenNewFicha}
+                        >
+                          <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
+                          <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                            Nova Ficha
+                          </p>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl lg:text-2xl font-bold mb-4 lg:mb-6 text-black">
+                  Minhas Sessões
+                </h2>
+
+                {loadingSessoes ? (
+                  <Loading message="Carregando sessões..." />
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+                    {/* Lista de sessões */}
+                    {sessoes.length === 0 ? (
+                      <>
+                        <div className="col-span-full">
+                          <EmptyState
+                            title="Nenhuma sessão encontrada"
+                            description='Clique no botão "+" para criar uma nova sessão.'
+                            action={
+                              <button
+                                className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                                onClick={() => setIsCriarSessaoModalOpen(true)}
+                              >
+                                <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
+                                <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                                  Nova Sessão
+                                </p>
+                              </button>
+                            }
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {sessoes.map((sessao) => {
+                          const isMestre = sessao.mestre_id === user?.id;
+                          const statusMap: Record<string, "active" | "paused" | "ended"> = {
+                            ativa: "active",
+                            pausada: "paused",
+                            encerrada: "ended",
+                          };
+                          return (
+                            <Card
+                              key={sessao.id}
+                              className={`ficha-card cursor-pointer relative ${
+                                isMestre
+                                  ? "ring-2 ring-brand bg-brand/5 border-brand/30"
+                                  : ""
+                              }`}
+                              onClick={() => handleOpenSessao(sessao.id)}
+                            >
+                              <CardHeader>
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <CardTitle
+                                        className={`text-lg ${isMestre ? "text-brand" : ""}`}
+                                      >
+                                        {sessao.nome}
+                                      </CardTitle>
+                                      {isMestre && (
+                                        <Badge variant="default" className="bg-brand text-primary">
+                                          Mestre
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <Badge
+                                    status={
+                                      statusMap[sessao.status] || "ended"
+                                    }
+                                  />
+                                </div>
+                              </CardHeader>
+                              <CardContent>
+                                {sessao.descricao && (
+                                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                                    {sessao.descricao}
+                                  </p>
+                                )}
+                                <div className="flex items-center justify-between mt-2">
+                                  <p className="text-xs text-gray-500">
+                                    {sessao.ficha_ids?.length || 0} fichas
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {new Date(
+                                      sessao.created_at
+                                    ).toLocaleDateString("pt-BR")}
+                                  </p>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                        {/* Botão de criar nova sessão */}
+                        <button
+                          className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group"
+                          onClick={() => setIsCriarSessaoModalOpen(true)}
+                        >
+                          <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
+                          <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
+                            Nova Sessão
+                          </p>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Modal com PDF */}
@@ -604,12 +659,17 @@ export default function DashboardPage() {
           user={user}
           onUpdate={async () => {
             // Recarrega o usuário para atualizar os dados exibidos
-            const { data: { user: updatedUser } } = await supabase.auth.getUser();
+            const {
+              data: { user: updatedUser },
+            } = await supabase.auth.getUser();
             if (updatedUser) {
               setUser(updatedUser);
               // Recarrega a foto de perfil do bucket
               try {
-                const url = await getFotoPerfilUrl(updatedUser.id, updatedUser.user_metadata?.foto_perfil_url);
+                const url = await getFotoPerfilUrl(
+                  updatedUser.id,
+                  updatedUser.user_metadata?.foto_perfil_url
+                );
                 setFotoPerfilUrl(url);
               } catch (error) {
                 console.error("Erro ao recarregar foto de perfil:", error);

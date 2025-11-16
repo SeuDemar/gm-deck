@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
+import { Button, Input, Textarea } from "@/components/ui";
 
 interface EditarSessaoModalProps {
   isOpen: boolean;
@@ -57,53 +58,44 @@ export default function EditarSessaoModal({
       <div className="w-full h-full p-6 overflow-auto flex flex-col">
         <h2 className="text-2xl font-bold mb-6 text-black">Editar Sessão</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 flex-1">
-          <div>
-            <label htmlFor="nome" className="block text-sm font-medium mb-2 text-black">
-              Nome da Sessão *
-            </label>
-            <input
-              id="nome"
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Digite o nome da sessão"
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black"
-              disabled={loading}
-              required
-            />
-          </div>
+          <Input
+            label="Nome da Sessão"
+            id="nome"
+            type="text"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Digite o nome da sessão"
+            required
+            disabled={loading}
+          />
 
-          <div>
-            <label htmlFor="descricao" className="block text-sm font-medium mb-2 text-black">
-              Descrição
-            </label>
-            <textarea
-              id="descricao"
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              placeholder="Digite uma descrição para a sessão (opcional)"
-              rows={4}
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black resize-none"
-              disabled={loading}
-            />
-          </div>
+          <Textarea
+            label="Descrição"
+            id="descricao"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            placeholder="Digite uma descrição para a sessão (opcional)"
+            rows={4}
+            disabled={loading}
+          />
 
           <div className="flex gap-3 mt-4">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={onClose}
-              className="px-6 py-2 rounded bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
               disabled={loading}
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="px-6 py-2 rounded bg-brand text-primary hover:bg-brand-light transition-colors disabled:opacity-50"
+              variant="primary"
+              isLoading={loading}
               disabled={loading}
             >
-              {loading ? "Salvando..." : "Salvar Alterações"}
-            </button>
+              Salvar Alterações
+            </Button>
           </div>
         </form>
       </div>

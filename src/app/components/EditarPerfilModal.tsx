@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "./Modal";
+import { Button, Input } from "@/components/ui";
 import { supabase } from "../../../lib/supabaseClient";
 import { getFotoPerfilUrl, getPublicUrl } from "../../../lib/storageUtils";
 import type { User } from "@supabase/supabase-js";
@@ -212,36 +213,26 @@ export default function EditarPerfilModal({
       <div className="w-full h-full p-6 overflow-auto flex flex-col">
         <h2 className="text-2xl font-bold mb-6 text-black">Editar Perfil</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 flex-1">
-          <div>
-            <label htmlFor="nome" className="block text-sm font-medium mb-2 text-black">
-              Nome *
-            </label>
-            <input
-              id="nome"
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Digite seu nome completo"
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black"
-              disabled={loading}
-              required
-            />
-          </div>
+          <Input
+            label="Nome"
+            id="nome"
+            type="text"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Digite seu nome completo"
+            required
+            disabled={loading}
+          />
 
-          <div>
-            <label htmlFor="apelido" className="block text-sm font-medium mb-2 text-black">
-              Apelido
-            </label>
-            <input
-              id="apelido"
-              type="text"
-              value={apelido}
-              onChange={(e) => setApelido(e.target.value)}
-              placeholder="Digite seu apelido (opcional)"
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black"
-              disabled={loading}
-            />
-          </div>
+          <Input
+            label="Apelido"
+            id="apelido"
+            type="text"
+            value={apelido}
+            onChange={(e) => setApelido(e.target.value)}
+            placeholder="Digite seu apelido (opcional)"
+            disabled={loading}
+          />
 
           <div>
             <label htmlFor="fotoPerfil" className="block text-sm font-medium mb-2 text-black">
@@ -262,7 +253,7 @@ export default function EditarPerfilModal({
                         setFotoPerfil(null);
                         setFotoPerfilPreview(null);
                       }}
-                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-colors"
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-error text-white text-xs font-bold hover:bg-error-light transition-colors"
                       disabled={loading}
                     >
                       ×
@@ -289,71 +280,53 @@ export default function EditarPerfilModal({
             )}
           </div>
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium mb-2 text-black">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={user?.email || ""}
-              disabled
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-gray-600 bg-gray-100 cursor-not-allowed"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              O email não pode ser alterado.
-            </p>
-          </div>
+          <Input
+            label="Email"
+            id="email"
+            type="email"
+            value={user?.email || ""}
+            disabled
+            helperText="O email não pode ser alterado."
+          />
 
-          <div>
-            <label htmlFor="senha" className="block text-sm font-medium mb-2 text-black">
-              Nova Senha
-            </label>
-            <input
-              id="senha"
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder="Deixe em branco para manter a senha atual"
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black"
-              disabled={loading}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Deixe em branco se não quiser alterar a senha.
-            </p>
-          </div>
+          <Input
+            label="Nova Senha"
+            id="senha"
+            type="password"
+            value={senha}
+            onChange={(e) => setSenha(e.target.value)}
+            placeholder="Deixe em branco para manter a senha atual"
+            disabled={loading}
+            helperText="Deixe em branco se não quiser alterar a senha."
+          />
 
-          <div>
-            <label htmlFor="confirmarSenha" className="block text-sm font-medium mb-2 text-black">
-              Confirmar Senha
-            </label>
-            <input
-              id="confirmarSenha"
-              type="password"
-              value={confirmarSenha}
-              onChange={(e) => setConfirmarSenha(e.target.value)}
-              placeholder="Confirme sua nova senha"
-              className="w-full px-4 py-2 rounded border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent text-black"
-              disabled={loading}
-            />
-          </div>
+          <Input
+            label="Confirmar Senha"
+            id="confirmarSenha"
+            type="password"
+            value={confirmarSenha}
+            onChange={(e) => setConfirmarSenha(e.target.value)}
+            placeholder="Confirme sua nova senha"
+            disabled={loading}
+          />
 
           <div className="flex gap-3 mt-4">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={onClose}
-              className="px-6 py-2 rounded bg-gray-300 text-gray-800 hover:bg-gray-400 transition-colors"
               disabled={loading}
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="px-6 py-2 rounded bg-brand text-primary hover:bg-brand-light transition-colors disabled:opacity-50"
+              variant="primary"
+              isLoading={loading || uploadingFoto}
               disabled={loading || uploadingFoto}
             >
-              {loading || uploadingFoto ? "Salvando..." : "Salvar Alterações"}
-            </button>
+              Salvar Alterações
+            </Button>
           </div>
         </form>
       </div>
