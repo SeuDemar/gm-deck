@@ -67,7 +67,6 @@ export function useSessaoRole(sessaoId: string | undefined): SessaoRole {
         setPapel(null);
         setLoading(false);
       } catch (error) {
-        console.error("Erro ao verificar papel na sessão:", error);
         setPapel(null);
         setLoading(false);
       }

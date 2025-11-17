@@ -77,8 +77,7 @@ export default function Sidebar({
         } else {
           setFotoPerfilUrl(null);
         }
-      } catch (error) {
-        console.error("Erro ao carregar foto de perfil:", error);
+        } catch (error) {
         setFotoPerfilUrl(null);
       }
     }
@@ -92,8 +91,7 @@ export default function Sidebar({
     try {
       await supabase.auth.signOut();
       router.push("/login");
-    } catch (error) {
-      console.error("Erro ao fazer logout:", error);
+      } catch (error) {
       router.push("/login");
     }
   }
@@ -221,6 +219,16 @@ export default function Sidebar({
                 </button>
               ))}
             </nav>
+
+            {/* Logo no final */}
+            <div className="flex items-center justify-center gap-3 mt-6 lg:mt-8 pt-6 lg:pt-8 border-t border-brand-light/20">
+              <img
+                src="/dataset/Gm-deck-image.png"
+                alt="GM Deck Logo"
+                className="w-16 h-16 lg:w-20 lg:h-20 object-contain"
+              />
+              <h2 className="text-lg lg:text-xl font-bold" style={{ color: '#083147' }}>Gm-Deck</h2>
+            </div>
           </div>
 
         </div>

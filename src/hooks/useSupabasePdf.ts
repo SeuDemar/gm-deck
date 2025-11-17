@@ -57,8 +57,6 @@ export function useSupabasePdf() {
         .eq("usuarioId", user.id); // Garante que só atualiza fichas do próprio usuário
       
       if (error) {
-        console.error("Erro ao atualizar ficha:", error);
-        console.error("Dados que tentou atualizar:", dataToSave);
         throw error;
       }
       
@@ -71,8 +69,6 @@ export function useSupabasePdf() {
       const { data, error } = await supabase.from("ficha").insert([dataToSave]);
 
       if (error) {
-        console.error("Erro ao salvar ficha:", error);
-        console.error("Dados que tentou inserir:", dataToSave);
         throw error;
       }
 
@@ -91,7 +87,6 @@ export function useSupabasePdf() {
       .single();
 
     if (error) {
-      console.error("Erro ao buscar ficha:", error);
       throw error;
     }
 
@@ -153,7 +148,6 @@ export function useSupabasePdf() {
       .order("personagem", { ascending: true });
 
     if (error) {
-      console.error("Erro ao buscar fichas do usuário:", error);
       throw error;
     }
 
@@ -177,7 +171,6 @@ export function useSupabasePdf() {
       .eq("usuarioId", user.id);
 
     if (error) {
-      console.error("Erro ao excluir ficha:", error);
       throw error;
     }
   }

@@ -12,44 +12,54 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function handleRegister() {
+  async function handleRegister(e?: React.FormEvent) {
+    e?.preventDefault();
+
     if (!nome.trim()) {
       warning("Por favor, preencha o nome");
-      setMessage("Por favor, preencha o nome ❌");
       return;
     }
 
     if (password !== confirmPassword) {
       warning("As senhas não conferem");
-      setMessage("As senhas não conferem ❌");
       return;
     }
 
     if (password.length < 6) {
       warning("A senha deve ter pelo menos 6 caracteres");
-      setMessage("A senha deve ter pelo menos 6 caracteres ❌");
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: nome.trim(),
-          apelido: apelido.trim() || null,
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: nome.trim(),
+            apelido: apelido.trim() || null,
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      showError(`Erro ao cadastrar: ${error.message}`);
-      setMessage(`Erro: ${error.message}`);
-    } else {
-      success("Cadastro realizado com sucesso! Verifique seu e-mail.");
-      setMessage("Cadastro realizado com sucesso ✅ Verifique seu e-mail.");
+      if (error) {
+        showError(`Erro ao cadastrar: ${error.message}`);
+      } else {
+        success("Cadastro realizado com sucesso! Verifique seu e-mail.");
+        // Limpa os campos após sucesso
+        setNome("");
+        setApelido("");
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+      }
+    } catch (error) {
+      showError("Erro inesperado ao cadastrar. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -57,68 +67,80 @@ export default function RegisterPage() {
     <main className="flex min-h-screen items-center justify-center p-4 font-sans bg-light">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-3xl text-center text-brand">Cadastro</CardTitle>
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <img
+                src="/dataset/Gm-deck-image.png"
+                alt="GM Deck Logo"
+                className="w-20 h-20 object-contain"
+              />
+            </div>
+            <CardTitle className="text-3xl text-center text-brand">Cadastro</CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {message && (
-            <p className="text-center font-medium text-brand-accent">
-              {message}
-            </p>
-          )}
+          <form onSubmit={handleRegister} className="space-y-4">
+            <Input
+              type="text"
+              label="Nome"
+              placeholder="Digite seu nome completo"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              required
+              disabled={loading}
+            />
 
-          <Input
-            type="text"
-            label="Nome"
-            placeholder="Digite seu nome completo"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            required
-          />
+            <Input
+              type="text"
+              label="Apelido"
+              placeholder="Digite seu apelido (opcional)"
+              value={apelido}
+              onChange={(e) => setApelido(e.target.value)}
+              disabled={loading}
+            />
 
-          <Input
-            type="text"
-            label="Apelido"
-            placeholder="Digite seu apelido (opcional)"
-            value={apelido}
-            onChange={(e) => setApelido(e.target.value)}
-          />
+            <Input
+              type="email"
+              label="Email"
+              placeholder="Digite seu email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={loading}
+            />
 
-          <Input
-            type="email"
-            label="Email"
-            placeholder="Digite seu email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
+            <Input
+              type="password"
+              label="Senha"
+              placeholder="Digite sua senha"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              helperText="A senha deve ter pelo menos 6 caracteres"
+              required
+              disabled={loading}
+            />
 
-          <Input
-            type="password"
-            label="Senha"
-            placeholder="Digite sua senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            helperText="A senha deve ter pelo menos 6 caracteres"
-            required
-          />
+            <Input
+              type="password"
+              label="Confirmar Senha"
+              placeholder="Confirme sua senha"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              disabled={loading}
+            />
 
-          <Input
-            type="password"
-            label="Confirmar Senha"
-            placeholder="Confirme sua senha"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
-
-          <Button
-            onClick={handleRegister}
-            variant="primary"
-            className="w-full"
-            size="lg"
-          >
-            Cadastrar
-          </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              className="w-full"
+              size="lg"
+              isLoading={loading}
+              disabled={loading}
+            >
+              Cadastrar
+            </Button>
+          </form>
 
           <p className="mt-4 text-center text-brand">
             Já tem conta?{" "}

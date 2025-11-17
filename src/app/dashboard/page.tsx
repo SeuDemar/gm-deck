@@ -9,6 +9,7 @@ import { supabase } from "../../../lib/supabaseClient";
 import PdfFichaModal from "../components/PdfFichaModal";
 import CriarSessaoModal from "../components/CriarSessaoModal";
 import EntrarSessaoModal from "../components/EntrarSessaoModal";
+import EscolherSessaoModal from "../components/EscolherSessaoModal";
 import EditarPerfilModal from "../components/EditarPerfilModal";
 import Sidebar from "../components/Sidebar";
 import { useSupabasePdf } from "../../hooks/useSupabasePdf";
@@ -34,13 +35,14 @@ export default function DashboardPage() {
   const router = useRouter();
   const { error: showError, success } = useToastContext();
   const { getUserFichas } = useSupabasePdf();
-  const { criarSessao, entrarSessao, getSessoesMestre, getSessoesJogador } =
+  const { criarSessao, entrarSessao, getSessoesMestre, getSessoesJogador, getSessao } =
     useSupabaseSessao();
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEscolherSessaoModalOpen, setIsEscolherSessaoModalOpen] = useState(false);
   const [isCriarSessaoModalOpen, setIsCriarSessaoModalOpen] = useState(false);
   const [isEntrarSessaoModalOpen, setIsEntrarSessaoModalOpen] = useState(false);
   const [isEditarPerfilModalOpen, setIsEditarPerfilModalOpen] = useState(false);
@@ -91,7 +93,6 @@ export default function DashboardPage() {
         const fichasData = await getUserFichas();
         setFichas(fichasData);
       } catch (error) {
-        console.error("Erro ao carregar fichas:", error);
       } finally {
         setLoadingFichas(false);
       }
@@ -128,7 +129,6 @@ export default function DashboardPage() {
 
       setSessoes(sessoesUnicas);
     } catch (error) {
-      console.error("Erro ao carregar sessões:", error);
     } finally {
       setLoadingSessoes(false);
     }
@@ -238,7 +238,6 @@ export default function DashboardPage() {
               const fichasData = await getUserFichas();
               setFichas(fichasData);
             } catch (error) {
-              console.error("Erro ao recarregar fichas:", error);
             } finally {
               setLoadingFichas(false);
             }
@@ -275,7 +274,6 @@ export default function DashboardPage() {
       const fichasData = await getUserFichas();
       setFichas(fichasData);
     } catch (error) {
-      console.error("Erro ao recarregar fichas:", error);
     } finally {
       setLoadingFichas(false);
     }
@@ -289,7 +287,6 @@ export default function DashboardPage() {
       success("Sessão criada com sucesso!");
       router.push(`/session/${sessao.id}`);
     } catch (error: unknown) {
-      console.error("Erro ao criar sessão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao criar sessão: ${errorMessage}`);
@@ -298,13 +295,29 @@ export default function DashboardPage() {
 
   async function handleEntrarSessao(sessaoId: string) {
     try {
+      // Verifica se o usuário já é mestre desta sessão
+      if (!user) {
+        showError("Usuário não autenticado. Por favor, faça login novamente.");
+        return;
+      }
+
+      const sessao = await getSessao(sessaoId);
+      if (!sessao) {
+        showError("Sessão não encontrada. Verifique o ID da sessão.");
+        return;
+      }
+
+      if (sessao.mestre_id === user.id) {
+        showError("Você já é o mestre desta sessão. Não é possível entrar como jogador.");
+        return;
+      }
+
       await entrarSessao(sessaoId);
       // Recarrega as sessões após entrar
       await loadSessoes();
       success("Você entrou na sessão com sucesso!");
       router.push(`/session/${sessaoId}`);
     } catch (error: unknown) {
-      console.error("Erro ao entrar na sessão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao entrar na sessão: ${errorMessage}`);
@@ -321,7 +334,6 @@ export default function DashboardPage() {
       const fichasData = await getUserFichas();
       setFichas(fichasData);
     } catch (error) {
-      console.error("Erro ao recarregar fichas:", error);
     }
   }
 
@@ -343,11 +355,6 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-light">
-        {/* Header com botão de menu (mobile) */}
-        <div className="lg:hidden flex items-center justify-between p-4 bg-light border-b border-gray-200">
-          <h1 className="text-lg font-bold text-brand mx-auto">GM Deck</h1>
-        </div>
-
         {/* Conteúdo com scroll */}
         <div className="flex-1 overflow-y-auto px-4 lg:px-6 pt-4 lg:pt-6 pb-6">
           {/* Tabs para alternar entre Fichas e Sessões */}
@@ -478,7 +485,7 @@ export default function DashboardPage() {
                             </p>
                             <button
                               className="flex flex-col items-center justify-center min-h-[120px] w-full border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer rounded-lg p-4"
-                              onClick={() => setIsCriarSessaoModalOpen(true)}
+                              onClick={() => setIsEscolherSessaoModalOpen(true)}
                             >
                               <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
                               <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
@@ -557,7 +564,7 @@ export default function DashboardPage() {
                         {/* Botão de criar nova sessão */}
                         <button
                           className="ficha-card flex flex-col items-center justify-center min-h-[120px] border-2 border-dashed border-brand hover:border-brand-light hover:bg-brand-light/5 transition-all group cursor-pointer"
-                          onClick={() => setIsCriarSessaoModalOpen(true)}
+                          onClick={() => setIsEscolherSessaoModalOpen(true)}
                         >
                           <Plus className="w-8 h-8 text-brand group-hover:text-brand-light transition-colors mb-2" />
                           <p className="text-sm text-brand group-hover:text-brand-light transition-colors font-medium">
@@ -593,6 +600,14 @@ export default function DashboardPage() {
           isOpen={isEntrarSessaoModalOpen}
           onClose={() => setIsEntrarSessaoModalOpen(false)}
           onEntrarSessao={handleEntrarSessao}
+        />
+
+        {/* Modal de Escolher Sessão */}
+        <EscolherSessaoModal
+          isOpen={isEscolherSessaoModalOpen}
+          onClose={() => setIsEscolherSessaoModalOpen(false)}
+          onCriarSessao={() => setIsCriarSessaoModalOpen(true)}
+          onEntrarSessao={() => setIsEntrarSessaoModalOpen(true)}
         />
 
         {/* Modal de Editar Perfil */}

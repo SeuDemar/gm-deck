@@ -45,8 +45,7 @@ export default function EditarSessaoModal({
     try {
       await onUpdate(nome.trim(), descricao.trim() || null);
       onClose();
-    } catch (error) {
-      console.error("Erro ao atualizar sessão:", error);
+      } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao atualizar sessão: ${errorMessage}`);
     } finally {

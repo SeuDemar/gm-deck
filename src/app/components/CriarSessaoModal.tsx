@@ -35,8 +35,7 @@ export default function CriarSessaoModal({
       setNome("");
       setDescricao("");
       onClose();
-    } catch (error) {
-      console.error(error);
+      } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao criar sessão: ${errorMessage}`);
     } finally {

@@ -33,8 +33,7 @@ export default function EntrarSessaoModal({
       // Limpa o campo após entrar
       setSessaoId("");
       onClose();
-    } catch (error) {
-      console.error(error);
+      } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao entrar na sessão: ${errorMessage}`);
     } finally {

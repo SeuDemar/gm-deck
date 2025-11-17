@@ -48,7 +48,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
     const collectFieldValues = useCallback(() => {
       const container = containerRef.current;
       if (!container) {
-        console.warn("collectFieldValues: Container não encontrado");
         return {};
       }
 
@@ -60,13 +59,9 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
         HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
       >("input, textarea, select");
 
-      console.log(`collectFieldValues: Encontrados ${inputs.length} campos`);
-
       inputs.forEach((el) => {
         const name = el.getAttribute("name");
         if (!name) {
-          // Log campos sem name para debug
-          console.warn("Campo sem atributo name:", el);
           return;
         }
 
@@ -81,10 +76,7 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
         }
 
         values[name] = value;
-        console.log(`Campo coletado: ${name} = "${value}"`);
       });
-
-      console.log("Valores coletados:", values);
 
       // Usa ref em vez de onValues diretamente
       onValuesRef.current?.(values);
@@ -147,9 +139,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
           // Verifica se o container tem dimensões válidas
           // Se não tiver, não tenta inicializar (evita o erro)
           if (!hasValidDimensions(containerRef.current)) {
-            console.warn(
-              "Container sem dimensões válidas, aguardando modal ficar visível..."
-            );
             return;
           }
 
@@ -211,7 +200,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
             }
 
             currentContainer.style.height = targetHeight;
-            console.log(`Forçando altura do container para: ${targetHeight}`);
 
             // Força outro reflow
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
@@ -228,9 +216,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
 
           // Verificação final antes de criar o PDFViewer
           if (!hasValidDimensions(currentContainer)) {
-            console.error(
-              "Container ainda sem dimensões válidas após configurar estilos. Abortando inicialização."
-            );
             return;
           }
 
@@ -249,9 +234,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
 
           // Verificação final antes de criar o PDFViewer
           if (!hasValidDimensions(currentContainer)) {
-            console.error(
-              "Container perdeu dimensões válidas antes de criar PDFViewer. Abortando."
-            );
             return;
           }
 
@@ -271,36 +253,11 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
             !containerRef.current ||
             !hasValidDimensions(currentContainer)
           ) {
-            console.error(
-              "Container perdeu dimensões válidas após aguardar frames. Abortando."
-            );
             return;
           }
 
-          // LOGS DE DEBUG: Verifica o estado exato do container antes de criar o PDFViewer
           const finalRect = currentContainer.getBoundingClientRect();
           const finalStyle = window.getComputedStyle(currentContainer);
-          console.log(
-            "=== DEBUG: Estado do container antes de criar PDFViewer ==="
-          );
-          console.log("getBoundingClientRect:", {
-            width: finalRect.width,
-            height: finalRect.height,
-            top: finalRect.top,
-            left: finalRect.left,
-          });
-          console.log("Computed style:", {
-            position: finalStyle.position,
-            width: finalStyle.width,
-            height: finalStyle.height,
-            display: finalStyle.display,
-            visibility: finalStyle.visibility,
-          });
-          console.log("Inline style:", {
-            position: currentContainer.style.position,
-            width: currentContainer.style.width,
-            height: currentContainer.style.height,
-          });
 
           // Garante que o container tem altura fixa em pixels (não apenas minHeight)
           // O PDF.js precisa de dimensões concretas, não apenas minHeight
@@ -311,8 +268,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
           ) {
             const fixedHeight = Math.max(600, finalRect.height || 600);
             currentContainer.style.height = `${fixedHeight}px`;
-            console.log(`Forçando altura fixa para: ${fixedHeight}px`);
-            // Força reflow
             // eslint-disable-next-line @typescript-eslint/no-unused-expressions
             currentContainer.offsetHeight;
           }
@@ -320,9 +275,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
           // Verificação final após forçar altura
           const finalCheckRect = currentContainer.getBoundingClientRect();
           if (finalCheckRect.width === 0 || finalCheckRect.height === 0) {
-            console.error(
-              `Container ainda sem dimensões válidas após forçar altura. Width: ${finalCheckRect.width}, Height: ${finalCheckRect.height}`
-            );
             return;
           }
 
@@ -330,12 +282,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
           const eventBus = new pdfjsViewerModule.EventBus();
           const pdfLinkService = new pdfjsViewerModule.PDFLinkService({
             eventBus,
-          });
-
-          console.log("Criando PDFViewer com container:", {
-            width: finalCheckRect.width,
-            height: finalCheckRect.height,
-            position: window.getComputedStyle(currentContainer).position,
           });
 
           // Cria o PDFViewer usando o container externo e o viewer interno
@@ -446,7 +392,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
             waitForAllPages();
           });
         } catch (err) {
-          console.error("Erro ao inicializar PDF.js:", err);
         }
       };
 
@@ -467,9 +412,6 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
             ) {
               initializePdf();
             } else {
-              console.error(
-                "Não foi possível inicializar o PDF: container ainda sem dimensões válidas"
-              );
             }
           }, 100);
         }
@@ -496,25 +438,13 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
       const container = containerRef.current;
       if (!container) return;
 
-      function handleFieldChange(event?: Event) {
-        // Log quando um campo é alterado (apenas para debug)
-        if (event?.target) {
-          const target = event.target as
-            | HTMLInputElement
-            | HTMLTextAreaElement
-            | HTMLSelectElement;
-          const name = target.getAttribute("name");
-          if (name) {
-            console.log(`Campo alterado: ${name} = "${target.value}"`);
-          }
-        }
+      function handleFieldChange() {
         collectFieldValues();
       }
 
       // Função para adicionar listeners a todos os campos
       const addListenersToAllFields = () => {
         const inputs = container.querySelectorAll("input, textarea, select");
-        console.log(`Adicionando listeners para ${inputs.length} campos`);
 
         inputs.forEach((input) => {
           // Remove listeners antigos antes de adicionar novos (evita duplicação)
@@ -556,9 +486,7 @@ const PdfJsViewer = React.forwardRef<PdfJsViewerRef, Props>(
           });
         });
 
-        // Se novos campos foram adicionados, re-adiciona listeners
         if (hasNewFields) {
-          console.log("Novos campos detectados, re-adicionando listeners");
           addListenersToAllFields();
           // Coleta valores novamente para garantir que temos todos os campos
           setTimeout(() => {

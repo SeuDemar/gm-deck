@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import Modal from "./Modal";
 import PdfJsViewer, { PdfJsViewerRef } from "./PdfJsViewer";
+import ConfirmacaoModal from "./ConfirmacaoModal";
 import { useSupabasePdf } from "@/hooks/useSupabasePdf";
 import { Button, Loading, useToastContext } from "@/components/ui";
 
@@ -28,6 +29,7 @@ export default function PdfFichaModal({
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isConfirmacaoDeleteOpen, setIsConfirmacaoDeleteOpen] = useState(false);
   const { savePdfData, getPdfData, deleteFicha } = useSupabasePdf();
   const { success, error: showError } = useToastContext();
 
@@ -59,7 +61,6 @@ export default function PdfFichaModal({
           setValues(fichaData); // Também define os valores atuais
         }
       } catch (err) {
-        console.error("Erro ao carregar dados da ficha:", err);
         const errorMessage =
           err instanceof Error
             ? err.message
@@ -82,7 +83,6 @@ export default function PdfFichaModal({
   // Callback disparado pelo viewer quando coleta valores
   // useCallback evita que a função seja recriada a cada render
   const handleValues = useCallback((v: Record<string, string>) => {
-    console.log("handleValues chamado com:", v);
     setValues(v);
   }, []);
 
@@ -95,33 +95,8 @@ export default function PdfFichaModal({
 
       if (pdfViewerRef.current?.collectValues) {
         const latestValues = pdfViewerRef.current.collectValues();
-        console.log("Valores coletados antes de salvar:", latestValues);
-        console.log(
-          "Quantidade de campos coletados:",
-          Object.keys(latestValues).length
-        );
-
-        // Usa os valores coletados diretamente, não do state
         valuesToSave = latestValues;
-
-        // Atualiza o state também para manter sincronizado
         setValues(latestValues);
-      } else {
-        console.warn(
-          "pdfViewerRef não está disponível, usando valores do state"
-        );
-      }
-
-      // Log dos valores antes de salvar para debug
-      console.log("Valores a serem salvos:", valuesToSave);
-      console.log("Quantidade de campos:", Object.keys(valuesToSave).length);
-
-      // Verifica se há valores vazios
-      const emptyFields = Object.entries(valuesToSave).filter(
-        ([_, value]) => !value || value.trim() === ""
-      );
-      if (emptyFields.length > 0) {
-        console.warn("Campos vazios encontrados:", emptyFields);
       }
 
       await savePdfData(valuesToSave, fichaId);
@@ -130,7 +105,6 @@ export default function PdfFichaModal({
       );
       onClose();
     } catch (err) {
-      console.error("Erro ao salvar ficha:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Erro desconhecido";
       showError(`Erro ao salvar ficha: ${errorMessage}`);
@@ -139,16 +113,13 @@ export default function PdfFichaModal({
     }
   }
 
+  function handleOpenDeleteConfirm() {
+    if (!fichaId) return;
+    setIsConfirmacaoDeleteOpen(true);
+  }
+
   async function handleDeleteFicha() {
     if (!fichaId) return;
-
-    if (
-      !confirm(
-        "Tem certeza que deseja excluir esta ficha? Esta ação não pode ser desfeita."
-      )
-    ) {
-      return;
-    }
 
     setDeleting(true);
     try {
@@ -157,7 +128,6 @@ export default function PdfFichaModal({
       onDelete?.(); // Chama o callback para recarregar a lista
       onClose();
     } catch (err) {
-      console.error("Erro ao excluir ficha:", err);
       const errorMessage =
         err instanceof Error ? err.message : "Erro desconhecido";
       showError(`Erro ao excluir ficha: ${errorMessage}`);
@@ -221,11 +191,10 @@ export default function PdfFichaModal({
             {fichaId && (
               <Button
                 variant="danger"
-                onClick={handleDeleteFicha}
-                isLoading={deleting}
+                onClick={handleOpenDeleteConfirm}
                 disabled={deleting || loading}
               >
-                {deleting ? "Excluindo..." : "Deletar Ficha"}
+                Deletar Ficha
               </Button>
             )}
             <Button
@@ -252,6 +221,19 @@ export default function PdfFichaModal({
           </div>
         )}
       </div>
+
+      {/* Modal de confirmação para deletar ficha */}
+      <ConfirmacaoModal
+        isOpen={isConfirmacaoDeleteOpen}
+        onClose={() => setIsConfirmacaoDeleteOpen(false)}
+        onConfirm={handleDeleteFicha}
+        title="Excluir Ficha"
+        message="Tem certeza que deseja excluir esta ficha? Esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        variant="danger"
+        loading={deleting}
+      />
     </Modal>
   );
 }

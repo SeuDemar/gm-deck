@@ -45,8 +45,7 @@ export default function EditarPerfilModal({
         try {
           const fotoUrl = await getFotoPerfilUrl(user.id, user.user_metadata?.foto_perfil_url);
           setFotoPerfilUrl(fotoUrl);
-        } catch (error) {
-          console.error("Erro ao carregar foto de perfil:", error);
+          } catch (error) {
           setFotoPerfilUrl(null);
         }
       }
@@ -100,8 +99,7 @@ export default function EditarPerfilModal({
           const urlParts = fotoPerfilUrl.split("/");
           const oldFilePath = urlParts.slice(urlParts.indexOf(bucketName) + 1).join("/");
           await supabase.storage.from(bucketName).remove([oldFilePath]);
-        } catch (removeError) {
-          console.warn("Erro ao remover foto anterior (pode não existir):", removeError);
+          } catch (removeError) {
         }
       }
 
@@ -119,8 +117,7 @@ export default function EditarPerfilModal({
 
       // Obtém URL pública da foto
       return getPublicUrl(filePath);
-    } catch (error) {
-      console.error("Erro ao fazer upload da foto:", error);
+      } catch (error) {
       throw error;
     } finally {
       setUploadingFoto(false);
@@ -187,10 +184,8 @@ export default function EditarPerfilModal({
           });
 
         if (perfilError) {
-          console.warn("Erro ao atualizar perfil na tabela:", perfilError);
         }
-      } catch (perfilError) {
-        console.warn("Tabela perfil não existe ou erro ao atualizar:", perfilError);
+        } catch (perfilError) {
       }
 
       success("Perfil atualizado com sucesso!");
@@ -201,7 +196,6 @@ export default function EditarPerfilModal({
       onUpdate?.();
       onClose();
     } catch (error) {
-      console.error("Erro ao atualizar perfil:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao atualizar perfil: ${errorMessage}`);
     } finally {

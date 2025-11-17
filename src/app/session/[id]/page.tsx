@@ -14,6 +14,7 @@ import {
 import { useSupabasePdf } from "../../../hooks/useSupabasePdf";
 import PdfFichaModal from "../../components/PdfFichaModal";
 import EditarSessaoModal from "../../components/EditarSessaoModal";
+import ConfirmacaoModal from "../../components/ConfirmacaoModal";
 import Sidebar from "../../components/Sidebar";
 import {
   Button,
@@ -99,7 +100,7 @@ export default function SessionPage() {
   const router = useRouter();
   const params = useParams();
   const sessaoId = params?.id as string;
-  const { error: showError, success, info } = useToastContext();
+  const { error: showError, success } = useToastContext();
 
   const [user, setUser] = useState<import("@supabase/supabase-js").User | null>(
     null
@@ -149,6 +150,11 @@ export default function SessionPage() {
   const [loadingFichasSessao, setLoadingFichasSessao] = useState(false);
   const [fichasMestre, setFichasMestre] = useState<FichaSessao[]>([]);
   const [loadingFichasMestre, setLoadingFichasMestre] = useState(false);
+  const [fichasOutrosJogadores, setFichasOutrosJogadores] = useState<
+    (FichaSessao & { jogadorNome: string })[]
+  >([]);
+  const [loadingFichasOutrosJogadores, setLoadingFichasOutrosJogadores] =
+    useState(false);
   const [selectedFichaId, setSelectedFichaId] = useState<string | undefined>(
     undefined
   );
@@ -156,6 +162,12 @@ export default function SessionPage() {
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [isEditarSessaoModalOpen, setIsEditarSessaoModalOpen] = useState(false);
   const [fichaColors, setFichaColors] = useState<Record<string, string>>({});
+  const [isConfirmacaoExcluirSessaoOpen, setIsConfirmacaoExcluirSessaoOpen] =
+    useState(false);
+  const [isConfirmacaoSairSessaoOpen, setIsConfirmacaoSairSessaoOpen] =
+    useState(false);
+  const [excluindoSessao, setExcluindoSessao] = useState(false);
+  const [saindoSessao, setSaindoSessao] = useState(false);
 
   // Hook para gerenciar sessões
   const {
@@ -196,59 +208,54 @@ export default function SessionPage() {
           setCopied(false);
         }, 2000);
       })
-      .catch((error) => {
-        console.error("Erro ao copiar ID:", error);
-        showError(
-          "Erro ao copiar ID da sessão. Por favor, copie manualmente."
-        );
+      .catch(() => {
+        showError("Erro ao copiar ID da sessão. Por favor, copie manualmente.");
       });
   }
 
   // Função para excluir sessão (apenas mestre)
+  function handleOpenExcluirSessaoConfirm() {
+    if (!sessaoId) return;
+    setIsConfirmacaoExcluirSessaoOpen(true);
+  }
+
   async function handleExcluirSessao() {
     if (!sessaoId) return;
 
-    if (
-      !confirm(
-        "Tem certeza que deseja excluir esta sessão? Todos os jogadores serão removidos e esta ação não pode ser desfeita."
-      )
-    ) {
-      return;
-    }
-
+    setExcluindoSessao(true);
     try {
       await excluirSessao(sessaoId);
       success("Sessão excluída com sucesso!");
       router.push("/dashboard");
     } catch (error: unknown) {
-      console.error("Erro ao excluir sessão:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao excluir sessão: ${errorMessage}`);
+    } finally {
+      setExcluindoSessao(false);
     }
   }
 
   // Função para cortar vínculos com a sessão (jogador)
+  function handleOpenSairSessaoConfirm() {
+    if (!sessaoId) return;
+    setIsConfirmacaoSairSessaoOpen(true);
+  }
+
   async function handleCortarVinculos() {
     if (!sessaoId) return;
 
-    if (
-      !confirm(
-        "Tem certeza que deseja sair permanentemente desta sessão? Você não poderá mais acessá-la."
-      )
-    ) {
-      return;
-    }
-
+    setSaindoSessao(true);
     try {
       await cortarVinculosSessao(sessaoId);
       success("Você saiu da sessão permanentemente!");
       router.push("/dashboard");
     } catch (error: unknown) {
-      console.error("Erro ao cortar vínculos:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
       showError(`Erro ao cortar vínculos: ${errorMessage}`);
+    } finally {
+      setSaindoSessao(false);
     }
   }
 
@@ -318,9 +325,7 @@ export default function SessionPage() {
             setSessao(sessaoData);
           }
         }
-      } catch (error) {
-        console.error("Erro ao atualizar status da sessão:", error);
-      }
+      } catch (error) {}
     }
 
     // Aguarda um pouco para garantir que o papel foi verificado
@@ -334,9 +339,7 @@ export default function SessionPage() {
 
       // Só atualiza se o usuário ainda está logado e é mestre
       if (user && sessaoId && isMestre && !loadingPapel) {
-        atualizarStatusSessao(sessaoId, "pausada").catch((error) => {
-          console.error("Erro ao pausar sessão ao sair:", error);
-        });
+        atualizarStatusSessao(sessaoId, "pausada").catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,9 +355,7 @@ export default function SessionPage() {
         await atualizarStatusJogadorSessao(sessaoId, "aceito");
         // Recarrega a lista de jogadores para atualizar a badge
         await loadJogadores();
-      } catch (error) {
-        console.error("Erro ao atualizar status do jogador:", error);
-      }
+      } catch (error) {}
     }
 
     // Aguarda um pouco para garantir que o papel foi verificado
@@ -366,9 +367,7 @@ export default function SessionPage() {
     return () => {
       // Só atualiza se o usuário ainda está logado e é jogador
       if (user && sessaoId && isJogador && !loadingPapel) {
-        atualizarStatusJogadorSessao(sessaoId, "pendente").catch((error) => {
-          console.error("Erro ao atualizar status do jogador ao sair:", error);
-        });
+        atualizarStatusJogadorSessao(sessaoId, "pendente").catch(() => {});
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -387,22 +386,14 @@ export default function SessionPage() {
       }
 
       if (!sessaoId || !sessao || !sessao.mestre_id) {
-        console.log("Não foi possível carregar mestre - faltando dados:", {
-          sessaoId,
-          sessao: !!sessao,
-          mestre_id: sessao?.mestre_id,
-        });
         return;
       }
 
-      // Se o usuário é o mestre, não precisa carregar
       if (isMestre) {
         setMestreData(null);
         setFotoMestre(null);
         return;
       }
-
-      console.log("Carregando dados do mestre:", sessao.mestre_id);
 
       setLoadingMestre(true);
       try {
@@ -414,17 +405,12 @@ export default function SessionPage() {
           .single();
 
         if (perfilData) {
-          console.log("Dados do mestre encontrados:", {
-            nome: perfilData.nome,
-            apelido: perfilData.apelido,
-          });
           setMestreData({
             id: perfilData.id,
             nome: perfilData.nome,
             apelido: perfilData.apelido,
           });
         } else {
-          console.warn("Perfil do mestre não encontrado na tabela perfil");
           setMestreData({
             id: sessao.mestre_id,
             nome: null,
@@ -437,11 +423,9 @@ export default function SessionPage() {
           const fotoUrl = await getFotoPerfilUrl(sessao.mestre_id, null);
           setFotoMestre(fotoUrl);
         } catch (error) {
-          console.error("Erro ao carregar foto do mestre:", error);
           setFotoMestre(null);
         }
       } catch (error) {
-        console.error("Erro ao buscar perfil do mestre:", error);
         setMestreData({
           id: sessao.mestre_id,
           nome: null,
@@ -470,25 +454,26 @@ export default function SessionPage() {
     try {
       // Busca todos os usuários com status na sessão
       const todosUsuarios = await getAllUsuariosComStatusSessao(sessaoId);
-      setJogadores(todosUsuarios);
 
-      // Carrega fotos de perfil de todos os usuários
+      // Filtra o mestre da lista de jogadores
+      const jogadoresFiltrados = todosUsuarios.filter(
+        (jogador) => jogador.usuario_id !== sessao?.mestre_id
+      );
+
+      setJogadores(jogadoresFiltrados);
+
+      // Carrega fotos de perfil de todos os usuários (incluindo mestre para compatibilidade)
       const fotos: Record<string, string | null> = {};
       for (const usuario of todosUsuarios) {
         try {
           const fotoUrl = await getFotoPerfilUrl(usuario.usuario_id, null);
           fotos[usuario.usuario_id] = fotoUrl;
         } catch (error) {
-          console.error(
-            `Erro ao carregar foto do usuário ${usuario.usuario_id}:`,
-            error
-          );
           fotos[usuario.usuario_id] = null;
         }
       }
       setFotosPerfil(fotos);
     } catch (error) {
-      console.error("Erro ao carregar jogadores:", error);
     } finally {
       setLoadingJogadores(false);
     }
@@ -528,7 +513,6 @@ export default function SessionPage() {
           setFichaSelecionadaId(data.ficha_id);
         }
       } catch (error) {
-        console.error("Erro ao carregar ficha selecionada:", error);
       } finally {
         setLoadingFichaSelecionada(false);
       }
@@ -573,7 +557,6 @@ export default function SessionPage() {
           }
         }
       } catch (error) {
-        console.error("Erro ao carregar fichas do jogador:", error);
       } finally {
         setLoadingFichasSessao(false);
       }
@@ -610,7 +593,6 @@ export default function SessionPage() {
           .order("personagem", { ascending: true });
 
         if (error) {
-          console.error("Erro ao carregar fichas da sessão:", error);
           throw error;
         }
 
@@ -627,7 +609,6 @@ export default function SessionPage() {
           setFichaColors((prev) => ({ ...prev, ...colors }));
         }
       } catch (error) {
-        console.error("Erro ao carregar fichas do mestre:", error);
       } finally {
         setLoadingFichasMestre(false);
       }
@@ -657,7 +638,6 @@ export default function SessionPage() {
           .in("id", fichaIds);
 
         if (error) {
-          console.error("Erro ao carregar cores das fichas:", error);
           return;
         }
 
@@ -670,13 +650,95 @@ export default function SessionPage() {
           });
           setFichaColors((prev) => ({ ...prev, ...colors }));
         }
-      } catch (error) {
-        console.error("Erro ao carregar cores das fichas:", error);
-      }
+      } catch (error) {}
     }
 
     loadFichaColors();
   }, [jogadores]);
+
+  // Carrega fichas dos outros jogadores (apenas para jogador ver)
+  useEffect(() => {
+    async function loadFichasOutrosJogadores() {
+      if (
+        !user ||
+        !sessaoId ||
+        !isJogador ||
+        !sessao ||
+        !sessao.ficha_ids ||
+        sessao.ficha_ids.length === 0 ||
+        loadingPapel
+      ) {
+        setFichasOutrosJogadores([]);
+        return;
+      }
+
+      setLoadingFichasOutrosJogadores(true);
+      try {
+        // Busca as fichas pelos IDs (mesma lógica do mestre)
+        const { data, error } = await supabase
+          .from("ficha")
+          .select(
+            "id, personagem, created_at, updated_at, badge_color, usuarioId"
+          )
+          .in("id", sessao.ficha_ids)
+          .order("personagem", { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!data || data.length === 0) {
+          setFichasOutrosJogadores([]);
+          return;
+        }
+
+        // Filtra fichas de outros jogadores OU a ficha selecionada do usuário atual
+        const fichasOutros = data.filter(
+          (ficha) =>
+            ficha.usuarioId !== user.id || ficha.id === fichaSelecionadaId
+        );
+
+        // Busca os perfis dos jogadores para obter os nomes
+        const fichasComJogador = await Promise.all(
+          fichasOutros.map(async (ficha) => {
+            const { data: perfilData } = await supabase
+              .from("perfil")
+              .select("nome, apelido")
+              .eq("id", ficha.usuarioId)
+              .single();
+
+            return {
+              id: ficha.id,
+              personagem: ficha.personagem,
+              created_at: ficha.created_at,
+              updated_at: ficha.updated_at,
+              jogadorNome: perfilData?.apelido || perfilData?.nome || "Jogador",
+              badge_color: ficha.badge_color,
+            };
+          })
+        );
+
+        setFichasOutrosJogadores(fichasComJogador);
+
+        // Carrega as cores das fichas
+        const colors: Record<string, string> = {};
+        fichasComJogador.forEach((ficha) => {
+          if (ficha.badge_color) {
+            colors[ficha.id] = ficha.badge_color;
+          }
+        });
+        setFichaColors((prev) => ({ ...prev, ...colors }));
+      } catch (error) {
+      } finally {
+        setLoadingFichasOutrosJogadores(false);
+      }
+    }
+
+    if (!loadingPapel && sessao) {
+      loadFichasOutrosJogadores();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sessaoId, isJogador, sessao, loadingPapel, fichaSelecionadaId]);
 
   // Listener para atualizar cores em tempo real
   useEffect(() => {
@@ -768,12 +830,13 @@ export default function SessionPage() {
           table: "sessao",
           filter: `id=eq.${sessaoId}`,
         },
-        (payload) => {
+        async (payload) => {
           const newData = payload.new as {
             id: string;
             status?: SessaoStatus;
             nome?: string;
             descricao?: string;
+            ficha_ids?: string[];
           };
           // Atualiza os dados da sessão
           if (newData.id === sessaoId) {
@@ -791,8 +854,41 @@ export default function SessionPage() {
                   newData.descricao !== undefined
                     ? newData.descricao
                     : prev.descricao,
+                ficha_ids:
+                  newData.ficha_ids !== undefined
+                    ? newData.ficha_ids
+                    : prev.ficha_ids,
               };
             });
+
+            // Se ficha_ids mudou e é mestre, recarrega as fichas
+            if (newData.ficha_ids !== undefined && isMestre && !loadingPapel) {
+              try {
+                if (newData.ficha_ids.length > 0) {
+                  const { data, error } = await supabase
+                    .from("ficha")
+                    .select(
+                      "id, personagem, created_at, updated_at, badge_color"
+                    )
+                    .in("id", newData.ficha_ids)
+                    .order("personagem", { ascending: true });
+
+                  if (!error && data) {
+                    setFichasMestre(data);
+                    // Atualiza as cores das fichas
+                    const colors: Record<string, string> = {};
+                    data.forEach((ficha) => {
+                      if (ficha.badge_color) {
+                        colors[ficha.id] = ficha.badge_color;
+                      }
+                    });
+                    setFichaColors((prev) => ({ ...prev, ...colors }));
+                  }
+                } else {
+                  setFichasMestre([]);
+                }
+              } catch (error) {}
+            }
           }
         }
       )
@@ -802,7 +898,7 @@ export default function SessionPage() {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessaoId]);
+  }, [sessaoId, isMestre, loadingPapel]);
 
   // Listener para atualizar ficha selecionada em tempo real
   useEffect(() => {
@@ -851,7 +947,7 @@ export default function SessionPage() {
                   ? [
                       {
                         label: "Excluir Sessão",
-                        onClick: handleExcluirSessao,
+                        onClick: handleOpenExcluirSessaoConfirm,
                         className:
                           "w-full px-4 py-3 rounded-lg transition-all bg-red-500/20 text-primary hover:bg-red-500/40 hover:shadow-md text-center font-semibold cursor-pointer border border-red-500/30",
                       },
@@ -861,7 +957,7 @@ export default function SessionPage() {
                   ? [
                       {
                         label: "Sair permanentemente",
-                        onClick: handleCortarVinculos,
+                        onClick: handleOpenSairSessaoConfirm,
                         className:
                           "w-full px-4 py-3 rounded-lg transition-all bg-red-500/20 text-primary hover:bg-red-500/40 hover:shadow-md text-center font-semibold cursor-pointer border border-red-500/30",
                       },
@@ -965,12 +1061,6 @@ export default function SessionPage() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-light w-full">
-        {/* Header com título (mobile) */}
-        <div className="lg:hidden flex items-center justify-between p-4 bg-light border-b border-gray-200 flex-shrink-0">
-          <h1 className="text-lg font-bold text-brand">GM Deck</h1>
-          <div className="w-10" /> {/* Spacer para centralizar */}
-        </div>
-
         {/* Conteúdo com scroll */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 lg:px-6 pt-4 lg:pt-6 pb-6 w-full">
           {/* Cabeçalho com nome da campanha e descrição */}
@@ -1048,7 +1138,7 @@ export default function SessionPage() {
                   <div className="flex items-center gap-4 pt-4 border-t border-gray-200">
                     <div>
                       <p className="text-sm text-gray-600 mb-1">
-                        Total de Jogadores
+                        Jogadores Ativos
                       </p>
                       <p className="text-2xl font-bold text-black">
                         {jogadores.filter((j) => j.status === "aceito").length}
@@ -1161,375 +1251,148 @@ export default function SessionPage() {
                           const displayName =
                             jogador.apelido || jogador.nome || "Jogador";
                           const isCurrentUser = jogador.usuario_id === user?.id;
+                          // Busca os detalhes completos da ficha do jogador
+                          const fichaCompleta = jogador.ficha?.id
+                            ? fichasMestre.find(
+                                (f) => f.id === jogador.ficha?.id
+                              )
+                            : null;
 
                           return (
-                            <Card
+                            <div
                               key={jogador.usuario_id}
-                              className="ficha-card"
+                              className="flex flex-col gap-4"
                             >
-                              <CardContent className="p-8">
-                                <div className="flex items-start gap-4">
-                                  {/* Foto de perfil */}
-                                  <Avatar
-                                    src={fotoPerfil}
-                                    name={displayName}
-                                    size="lg"
-                                  />
+                              <Card className="ficha-card">
+                                <CardContent className="p-8">
+                                  <div className="flex items-start gap-4">
+                                    {/* Foto de perfil */}
+                                    <Avatar
+                                      src={fotoPerfil}
+                                      name={displayName}
+                                      size="lg"
+                                    />
 
-                                  {/* Informações do jogador */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <CardTitle className="text-xl truncate">
-                                        {isCurrentUser ? "Você" : displayName}
-                                      </CardTitle>
-                                      {isCurrentUser && (
-                                        <Badge
-                                          variant="default"
-                                          className="bg-brand-light text-primary"
-                                        >
-                                          Você
-                                        </Badge>
-                                      )}
-                                      <Badge
-                                        status={
-                                          jogador.status === "aceito"
-                                            ? "active"
-                                            : jogador.status === "pendente"
-                                              ? "inactive" // "pendente" significa que o jogador saiu (inativo)
-                                              : jogador.status === "recusado"
-                                                ? "rejected"
-                                                : "inactive"
-                                        }
-                                      />
-                                    </div>
-
-                                    {/* Personagem */}
-                                    {jogador.ficha ? (
-                                      <div className="mb-2 flex items-center gap-2 flex-wrap">
-                                        <span className="text-base text-gray-600 font-medium">
-                                          Personagem:
-                                        </span>
-                                        <Badge
-                                          style={{
-                                            backgroundColor: getPersonagemColor(
-                                              jogador.ficha.personagem,
-                                              jogador.ficha.id,
-                                              fichaColors
-                                            ),
-                                            color: getPersonagemTextColor(
-                                              jogador.ficha.personagem,
-                                              jogador.ficha.id,
-                                              fichaColors
-                                            ),
-                                          }}
-                                          className="text-base font-semibold"
-                                        >
-                                          {jogador.ficha.personagem ||
-                                            "Sem nome"}
-                                        </Badge>
-                                        {isCurrentUser && jogador.ficha && (
-                                          <span className="relative inline-block">
-                                            <input
-                                              type="color"
-                                              id={`color-picker-${jogador.ficha.id}`}
-                                              style={{
-                                                position: "absolute",
-                                                opacity: 0,
-                                                width: "1px",
-                                                height: "1px",
-                                                pointerEvents: "none",
-                                              }}
-                                              value={(() => {
-                                                const currentColor =
-                                                  fichaColors[
-                                                    jogador.ficha?.id || ""
-                                                  ] ||
-                                                  getPersonagemColor(
-                                                    jogador.ficha?.personagem ||
-                                                      null,
-                                                    jogador.ficha?.id,
-                                                    fichaColors
-                                                  );
-                                                if (
-                                                  currentColor.startsWith(
-                                                    "rgba"
-                                                  )
-                                                ) {
-                                                  const match =
-                                                    currentColor.match(/\d+/g);
-                                                  if (
-                                                    match &&
-                                                    match.length >= 3
-                                                  ) {
-                                                    const r = parseInt(
-                                                      match[0]
-                                                    );
-                                                    const g = parseInt(
-                                                      match[1]
-                                                    );
-                                                    const b = parseInt(
-                                                      match[2]
-                                                    );
-                                                    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-                                                  }
-                                                } else if (
-                                                  currentColor.startsWith(
-                                                    "hsla"
-                                                  )
-                                                ) {
-                                                  const match =
-                                                    currentColor.match(
-                                                      /[\d.]+/g
-                                                    );
-                                                  if (
-                                                    match &&
-                                                    match.length >= 3
-                                                  ) {
-                                                    const h = parseFloat(
-                                                      match[0]
-                                                    );
-                                                    const s =
-                                                      parseFloat(match[1]) /
-                                                      100;
-                                                    const l =
-                                                      parseFloat(match[2]) /
-                                                      100;
-                                                    const c =
-                                                      (1 -
-                                                        Math.abs(2 * l - 1)) *
-                                                      s;
-                                                    const x =
-                                                      c *
-                                                      (1 -
-                                                        Math.abs(
-                                                          ((h / 60) % 2) - 1
-                                                        ));
-                                                    const m = l - c / 2;
-                                                    let r = 0,
-                                                      g = 0,
-                                                      b = 0;
-                                                    if (h < 60) {
-                                                      r = c;
-                                                      g = x;
-                                                      b = 0;
-                                                    } else if (h < 120) {
-                                                      r = x;
-                                                      g = c;
-                                                      b = 0;
-                                                    } else if (h < 180) {
-                                                      r = 0;
-                                                      g = c;
-                                                      b = x;
-                                                    } else if (h < 240) {
-                                                      r = 0;
-                                                      g = x;
-                                                      b = c;
-                                                    } else if (h < 300) {
-                                                      r = x;
-                                                      g = 0;
-                                                      b = c;
-                                                    } else {
-                                                      r = c;
-                                                      g = 0;
-                                                      b = x;
-                                                    }
-                                                    r = Math.round(
-                                                      (r + m) * 255
-                                                    );
-                                                    g = Math.round(
-                                                      (g + m) * 255
-                                                    );
-                                                    b = Math.round(
-                                                      (b + m) * 255
-                                                    );
-                                                    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-                                                  }
-                                                }
-                                                return "#6b7280";
-                                              })()}
-                                              onInput={async (e) => {
-                                                if (!jogador.ficha?.id) return;
-                                                const hex = (
-                                                  e.target as HTMLInputElement
-                                                ).value;
-                                                const r = parseInt(
-                                                  hex.slice(1, 3),
-                                                  16
-                                                );
-                                                const g = parseInt(
-                                                  hex.slice(3, 5),
-                                                  16
-                                                );
-                                                const b = parseInt(
-                                                  hex.slice(5, 7),
-                                                  16
-                                                );
-                                                const newColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
-                                                setFichaColors({
-                                                  ...fichaColors,
-                                                  [jogador.ficha.id]: newColor,
-                                                });
-                                                // Salva no banco de dados
-                                                try {
-                                                  await supabase
-                                                    .from("ficha")
-                                                    .update({
-                                                      badge_color: newColor,
-                                                    })
-                                                    .eq("id", jogador.ficha.id);
-                                                } catch (error) {
-                                                  console.error(
-                                                    "Erro ao salvar cor:",
-                                                    error
-                                                  );
-                                                }
-                                              }}
-                                              onChange={async (e) => {
-                                                if (!jogador.ficha?.id) return;
-                                                const hex = e.target.value;
-                                                const r = parseInt(
-                                                  hex.slice(1, 3),
-                                                  16
-                                                );
-                                                const g = parseInt(
-                                                  hex.slice(3, 5),
-                                                  16
-                                                );
-                                                const b = parseInt(
-                                                  hex.slice(5, 7),
-                                                  16
-                                                );
-                                                const newColor = `rgba(${r}, ${g}, ${b}, 0.2)`;
-                                                setFichaColors({
-                                                  ...fichaColors,
-                                                  [jogador.ficha.id]: newColor,
-                                                });
-                                                // Salva no banco de dados
-                                                try {
-                                                  await supabase
-                                                    .from("ficha")
-                                                    .update({
-                                                      badge_color: newColor,
-                                                    })
-                                                    .eq("id", jogador.ficha.id);
-                                                } catch (error) {
-                                                  console.error(
-                                                    "Erro ao salvar cor:",
-                                                    error
-                                                  );
-                                                }
-                                              }}
-                                              onClick={(e) =>
-                                                e.stopPropagation()
-                                              }
-                                            />
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                const colorInput =
-                                                  document.getElementById(
-                                                    `color-picker-${jogador.ficha?.id}`
-                                                  ) as HTMLInputElement;
-                                                if (colorInput) {
-                                                  colorInput.click();
-                                                }
-                                              }}
-                                              className="p-1 rounded hover:bg-gray-100 transition-colors cursor-pointer flex items-center"
-                                              title="Alterar cor"
-                                            >
-                                              <Paintbrush className="w-5 h-5 text-gray-600" />
-                                            </button>
-                                          </span>
+                                    {/* Informações do jogador */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <CardTitle className="text-xl truncate">
+                                          {isCurrentUser ? "Você" : displayName}
+                                        </CardTitle>
+                                        {isCurrentUser && (
+                                          <Badge
+                                            variant="default"
+                                            className="bg-brand-light text-primary"
+                                          >
+                                            Você
+                                          </Badge>
                                         )}
+                                        <Badge
+                                          status={
+                                            jogador.status === "aceito"
+                                              ? "active"
+                                              : jogador.status === "pendente"
+                                                ? "inactive" // "pendente" significa que o jogador saiu (inativo)
+                                                : jogador.status === "recusado"
+                                                  ? "rejected"
+                                                  : "inactive"
+                                          }
+                                        />
                                       </div>
-                                    ) : (
-                                      <p className="text-sm text-gray-500 italic mb-2">
-                                        Nenhuma ficha selecionada
-                                      </p>
-                                    )}
 
-                                    {/* Nome completo (se não tiver apelido) */}
-                                    {jogador.nome && !jogador.apelido && (
-                                      <div className="flex items-center gap-2 mt-2">
-                                        <p className="text-xs text-gray-500 truncate">
-                                          {jogador.nome}
+                                      {/* Personagem */}
+                                      {jogador.ficha ? (
+                                        <div className="mb-2 flex items-center gap-2 flex-wrap">
+                                          <span className="text-base text-gray-600 font-medium">
+                                            Personagem:
+                                          </span>
+                                          <Badge
+                                            style={{
+                                              backgroundColor:
+                                                getPersonagemColor(
+                                                  jogador.ficha.personagem,
+                                                  jogador.ficha.id,
+                                                  fichaColors
+                                                ),
+                                              color: getPersonagemTextColor(
+                                                jogador.ficha.personagem,
+                                                jogador.ficha.id,
+                                                fichaColors
+                                              ),
+                                            }}
+                                            className="text-base font-semibold"
+                                          >
+                                            {jogador.ficha.personagem ||
+                                              "Sem nome"}
+                                          </Badge>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-gray-500 italic mb-2">
+                                          Nenhuma ficha selecionada
                                         </p>
-                                      </div>
-                                    )}
+                                      )}
+
+                                      {/* Nome completo (se não tiver apelido) */}
+                                      {jogador.nome && !jogador.apelido && (
+                                        <div className="flex items-center gap-2 mt-2">
+                                          <p className="text-xs text-gray-500 truncate">
+                                            {jogador.nome}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              </CardContent>
-                            </Card>
+                                </CardContent>
+                              </Card>
+
+                              {/* Card da Ficha do Jogador */}
+                              {fichaCompleta && (
+                                <Card
+                                  className="ficha-card cursor-pointer"
+                                  onClick={async () => {
+                                    setSelectedFichaId(fichaCompleta.id);
+                                    // Mestre pode editar qualquer ficha
+                                    setIsReadOnly(false);
+                                    setIsModalOpen(true);
+                                  }}
+                                >
+                                  <CardHeader>
+                                    <div className="flex items-center gap-2">
+                                      <Badge
+                                        style={{
+                                          backgroundColor: getPersonagemColor(
+                                            fichaCompleta.personagem,
+                                            fichaCompleta.id,
+                                            fichaColors
+                                          ),
+                                          color: getPersonagemTextColor(
+                                            fichaCompleta.personagem,
+                                            fichaCompleta.id,
+                                            fichaColors
+                                          ),
+                                        }}
+                                        className="text-base font-semibold"
+                                      >
+                                        {fichaCompleta.personagem || "Sem nome"}
+                                      </Badge>
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent>
+                                    <p className="text-sm text-gray-600">
+                                      Criada em:{" "}
+                                      {new Date(
+                                        fichaCompleta.created_at
+                                      ).toLocaleDateString("pt-BR")}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
                     )}
                   </div>
-
-                  {/* Lista de Fichas da Sessão - Mestre vê todas */}
-                  {sessao?.ficha_ids && sessao.ficha_ids.length > 0 && (
-                    <div className="p-4 rounded-lg bg-primary shadow-md">
-                      <h3 className="text-lg font-semibold mb-4 text-black">
-                        Fichas da Sessão ({sessao.ficha_ids.length})
-                      </h3>
-                      {loadingFichasMestre ? (
-                        <Loading message="Carregando fichas..." />
-                      ) : fichasMestre.length === 0 ? (
-                        <EmptyState
-                          title="Nenhuma ficha"
-                          description="Ainda não há fichas nesta sessão."
-                        />
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {fichasMestre.map((ficha) => (
-                            <Card
-                              key={ficha.id}
-                              className="ficha-card cursor-pointer"
-                              onClick={async () => {
-                                setSelectedFichaId(ficha.id);
-                                // Verifica se a ficha pertence ao usuário (mestre pode ver todas, mas só edita as próprias)
-                                if (ficha.id) {
-                                  const isOwner = await isFichaOwner(ficha.id);
-                                  setIsReadOnly(!isOwner);
-                                }
-                                setIsModalOpen(true);
-                              }}
-                            >
-                              <CardHeader>
-                                <div className="flex items-center gap-2">
-                                  <Badge
-                                    style={{
-                                      backgroundColor: getPersonagemColor(
-                                        ficha.personagem,
-                                        ficha.id,
-                                        fichaColors
-                                      ),
-                                      color: getPersonagemTextColor(
-                                        ficha.personagem,
-                                        ficha.id,
-                                        fichaColors
-                                      ),
-                                    }}
-                                    className="text-base font-semibold"
-                                  >
-                                    {ficha.personagem || "Sem nome"}
-                                  </Badge>
-                                </div>
-                              </CardHeader>
-                              <CardContent>
-                                <p className="text-sm text-gray-600">
-                                  Criada em:{" "}
-                                  {new Date(
-                                    ficha.created_at
-                                  ).toLocaleDateString("pt-BR")}
-                                </p>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -1555,72 +1418,53 @@ export default function SessionPage() {
                           const displayName =
                             jogador.apelido || jogador.nome || "Jogador";
                           const isCurrentUser = jogador.usuario_id === user?.id;
+                          // Busca os detalhes completos da ficha do jogador
+                          const fichaCompleta = jogador.ficha?.id
+                            ? fichasOutrosJogadores.find(
+                                (f) => f.id === jogador.ficha?.id
+                              )
+                            : null;
 
                           return (
-                            <Card
+                            <div
                               key={jogador.usuario_id}
-                              className="ficha-card"
+                              className="flex flex-col gap-4"
                             >
-                              <CardContent className="p-8">
-                                <div className="flex items-start gap-4">
-                                  {/* Foto de perfil */}
-                                  <Avatar
-                                    src={fotoPerfil}
-                                    name={displayName}
-                                    size="lg"
-                                  />
+                              <Card className="ficha-card">
+                                <CardContent className="p-8">
+                                  <div className="flex items-start gap-4">
+                                    {/* Foto de perfil */}
+                                    <Avatar
+                                      src={fotoPerfil}
+                                      name={displayName}
+                                      size="lg"
+                                    />
 
-                                  {/* Informações do jogador */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <CardTitle className="text-xl truncate">
-                                        {isCurrentUser ? "Você" : displayName}
-                                      </CardTitle>
-                                      {isCurrentUser && (
+                                    {/* Informações do jogador */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <CardTitle className="text-xl truncate">
+                                          {isCurrentUser ? "Você" : displayName}
+                                        </CardTitle>
+                                        {isCurrentUser && (
+                                          <Badge
+                                            variant="default"
+                                            className="bg-brand-light text-primary"
+                                          >
+                                            Você
+                                          </Badge>
+                                        )}
                                         <Badge
-                                          variant="default"
-                                          className="bg-brand-light text-primary"
-                                        >
-                                          Você
-                                        </Badge>
-                                      )}
-                                      <Badge
-                                        status={
-                                          jogador.status === "aceito"
-                                            ? "active"
-                                            : jogador.status === "pendente"
-                                              ? "inactive" // "pendente" significa que o jogador saiu (inativo)
-                                              : jogador.status === "recusado"
-                                                ? "rejected"
-                                                : "inactive"
-                                        }
-                                      />
-                                    </div>
-
-                                    {/* Personagem */}
-                                    {jogador.ficha ? (
-                                      <div className="mb-2 flex items-center gap-2 flex-wrap">
-                                        <span className="text-base text-gray-600 font-medium">
-                                          Personagem:
-                                        </span>
-                                        <Badge
-                                          style={{
-                                            backgroundColor: getPersonagemColor(
-                                              jogador.ficha.personagem,
-                                              jogador.ficha.id,
-                                              fichaColors
-                                            ),
-                                            color: getPersonagemTextColor(
-                                              jogador.ficha.personagem,
-                                              jogador.ficha.id,
-                                              fichaColors
-                                            ),
-                                          }}
-                                          className="text-base font-semibold"
-                                        >
-                                          {jogador.ficha.personagem ||
-                                            "Sem nome"}
-                                        </Badge>
+                                          status={
+                                            jogador.status === "aceito"
+                                              ? "active"
+                                              : jogador.status === "pendente"
+                                                ? "inactive" // "pendente" significa que o jogador saiu (inativo)
+                                                : jogador.status === "recusado"
+                                                  ? "rejected"
+                                                  : "inactive"
+                                          }
+                                        />
                                         {isCurrentUser && jogador.ficha && (
                                           <span className="relative inline-block">
                                             <input
@@ -1763,7 +1607,6 @@ export default function SessionPage() {
                                                   ...fichaColors,
                                                   [jogador.ficha.id]: newColor,
                                                 });
-                                                // Salva no banco de dados
                                                 try {
                                                   await supabase
                                                     .from("ficha")
@@ -1771,12 +1614,7 @@ export default function SessionPage() {
                                                       badge_color: newColor,
                                                     })
                                                     .eq("id", jogador.ficha.id);
-                                                } catch (error) {
-                                                  console.error(
-                                                    "Erro ao salvar cor:",
-                                                    error
-                                                  );
-                                                }
+                                                } catch (error) {}
                                               }}
                                               onChange={async (e) => {
                                                 if (!jogador.ficha?.id) return;
@@ -1798,7 +1636,6 @@ export default function SessionPage() {
                                                   ...fichaColors,
                                                   [jogador.ficha.id]: newColor,
                                                 });
-                                                // Salva no banco de dados
                                                 try {
                                                   await supabase
                                                     .from("ficha")
@@ -1806,12 +1643,7 @@ export default function SessionPage() {
                                                       badge_color: newColor,
                                                     })
                                                     .eq("id", jogador.ficha.id);
-                                                } catch (error) {
-                                                  console.error(
-                                                    "Erro ao salvar cor:",
-                                                    error
-                                                  );
-                                                }
+                                                } catch (error) {}
                                               }}
                                               onClick={(e) =>
                                                 e.stopPropagation()
@@ -1836,24 +1668,94 @@ export default function SessionPage() {
                                           </span>
                                         )}
                                       </div>
-                                    ) : (
-                                      <p className="text-sm text-gray-500 italic mb-2">
-                                        Nenhuma ficha selecionada
-                                      </p>
-                                    )}
 
-                                    {/* Nome completo (se não tiver apelido) */}
-                                    {jogador.nome && !jogador.apelido && (
-                                      <div className="flex items-center gap-2 mt-2">
-                                        <p className="text-xs text-gray-500 truncate">
-                                          {jogador.nome}
+                                      {/* Personagem */}
+                                      {jogador.ficha ? (
+                                        <div className="mb-2 flex items-center gap-2 flex-wrap">
+                                          <span className="text-base text-gray-600 font-medium">
+                                            Personagem:
+                                          </span>
+                                          <Badge
+                                            style={{
+                                              backgroundColor:
+                                                getPersonagemColor(
+                                                  jogador.ficha.personagem,
+                                                  jogador.ficha.id,
+                                                  fichaColors
+                                                ),
+                                              color: getPersonagemTextColor(
+                                                jogador.ficha.personagem,
+                                                jogador.ficha.id,
+                                                fichaColors
+                                              ),
+                                            }}
+                                            className="text-base font-semibold"
+                                          >
+                                            {jogador.ficha.personagem ||
+                                              "Sem nome"}
+                                          </Badge>
+                                        </div>
+                                      ) : (
+                                        <p className="text-sm text-gray-500 italic mb-2">
+                                          Nenhuma ficha selecionada
                                         </p>
-                                      </div>
-                                    )}
+                                      )}
+
+                                      {/* Nome completo (se não tiver apelido) */}
+                                      {jogador.nome && !jogador.apelido && (
+                                        <div className="flex items-center gap-2 mt-2">
+                                          <p className="text-xs text-gray-500 truncate">
+                                            {jogador.nome}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              </CardContent>
-                            </Card>
+                                </CardContent>
+                              </Card>
+
+                              {/* Card da Ficha do Jogador */}
+                              {fichaCompleta && (
+                                <Card
+                                  className="ficha-card opacity-90"
+                                  style={{ cursor: "not-allowed" }}
+                                  title="Você não tem permissão para acessar esta ficha"
+                                >
+                                  <CardHeader>
+                                    <div className="flex items-center gap-2">
+                                      <Badge
+                                        style={{
+                                          backgroundColor: getPersonagemColor(
+                                            fichaCompleta.personagem,
+                                            fichaCompleta.id,
+                                            fichaColors
+                                          ),
+                                          color: getPersonagemTextColor(
+                                            fichaCompleta.personagem,
+                                            fichaCompleta.id,
+                                            fichaColors
+                                          ),
+                                        }}
+                                        className="text-base font-semibold"
+                                      >
+                                        {fichaCompleta.personagem || "Sem nome"}
+                                      </Badge>
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent>
+                                    <p className="text-sm text-gray-600 mb-2">
+                                      Jogador: {fichaCompleta.jogadorNome}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      Criada em:{" "}
+                                      {new Date(
+                                        fichaCompleta.created_at
+                                      ).toLocaleDateString("pt-BR")}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -1888,6 +1790,15 @@ export default function SessionPage() {
                                 ? "ring-2 ring-green-500 bg-green-50"
                                 : "hover:bg-gray-50"
                             }`}
+                            onClick={async () => {
+                              setSelectedFichaId(ficha.id);
+                              // Jogador pode editar suas próprias fichas
+                              if (ficha.id) {
+                                const isOwner = await isFichaOwner(ficha.id);
+                                setIsReadOnly(!isOwner);
+                              }
+                              setIsModalOpen(true);
+                            }}
                           >
                             {isSelecionada && (
                               <Badge
@@ -1948,10 +1859,6 @@ export default function SessionPage() {
                                         }
                                       }
                                     } catch (error) {
-                                      console.error(
-                                        "Erro ao selecionar ficha:",
-                                        error
-                                      );
                                       const errorMessage =
                                         error instanceof Error
                                           ? error.message
@@ -1998,7 +1905,6 @@ export default function SessionPage() {
               success("Sessão atualizada com sucesso!");
             }
           } catch (error) {
-            console.error("Erro ao atualizar sessão:", error);
             throw error;
           }
         }}
@@ -2031,9 +1937,7 @@ export default function SessionPage() {
                   setSessao(sessaoData);
                 }
               }
-            } catch (error) {
-              console.error("Erro ao recarregar fichas:", error);
-            }
+            } catch (error) {}
           } else if (isMestre) {
             // Recarrega as fichas do mestre
             if (sessao && sessao.ficha_ids && sessao.ficha_ids.length > 0) {
@@ -2054,14 +1958,38 @@ export default function SessionPage() {
                     setSessao(sessaoData);
                   }
                 }
-              } catch (error) {
-                console.error("Erro ao recarregar fichas:", error);
-              }
+              } catch (error) {}
             } else {
               setFichasMestre([]);
             }
           }
         }}
+      />
+
+      {/* Modal de confirmação para excluir sessão */}
+      <ConfirmacaoModal
+        isOpen={isConfirmacaoExcluirSessaoOpen}
+        onClose={() => setIsConfirmacaoExcluirSessaoOpen(false)}
+        onConfirm={handleExcluirSessao}
+        title="Excluir Sessão"
+        message="Tem certeza que deseja excluir esta sessão? Todos os jogadores serão removidos e esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        variant="danger"
+        loading={excluindoSessao}
+      />
+
+      {/* Modal de confirmação para sair da sessão */}
+      <ConfirmacaoModal
+        isOpen={isConfirmacaoSairSessaoOpen}
+        onClose={() => setIsConfirmacaoSairSessaoOpen(false)}
+        onConfirm={handleCortarVinculos}
+        title="Sair da Sessão"
+        message="Tem certeza que deseja sair permanentemente desta sessão? Você não poderá mais acessá-la."
+        confirmText="Sair"
+        cancelText="Cancelar"
+        variant="danger"
+        loading={saindoSessao}
       />
     </div>
   );
